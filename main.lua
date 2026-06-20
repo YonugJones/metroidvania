@@ -1,18 +1,23 @@
 local Player = require('src.player')
 local World = require('src.world')
+local Camera = require('src.camera')
 
 function love.load()
   world = World.new()
   player = Player.new(100, 100)
+  camera = Camera.new()
 end
 
 function love.update(dt)
   player:update(dt, world)
+  camera:follow(player, love.graphics.getWidth(), love.graphics.getHeight())
 end
 
 function love.draw()
+  camera:attach()
   world:draw()
   player:draw()
+  camera:detach()
 end
 
 function love.keypressed(key)
