@@ -28,9 +28,9 @@ end
 
 function World:draw()
   -- Loop through the rows
-  for row = 1, #self.map, 1 do
+  for row = 1, #self.map do
     -- Loop through the columns of each row
-    for col = 1, #self.map[row], 1 do
+    for col = 1, #self.map[row] do
       -- If there is a block
       if self.map[row][col] == 1 then
         -- define the x position of a block - left side of block
@@ -51,11 +51,11 @@ end
 function World:getTiles()
   local tiles = {}
 
-  for row = 1, #self.map, 1 do
-    for col = 1, #self.map[row], 1 do
+  for row = 1, #self.map do
+    for col = 1, #self.map[row] do
       if self.map[row][col] == 1 then
         table.insert(tiles, {
-          x = (col) * self.tileSize,
+          x = (col - 1) * self.tileSize,
           y = (row - 1) * self.tileSize,
           width = self.tileSize,
           height = self.tileSize,
