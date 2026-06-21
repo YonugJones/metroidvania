@@ -1,14 +1,12 @@
 local Player = {}
--- if any key is looked up on any instance of Player and not found,
--- that method will be looked up on Player itself
 Player.__index = Player
 
 local MOVE_SPEED = 200
 local GRAVITY = 800 -- pixels per second squared, pulls player down
 local JUMP_FORCE = -400
+local FRAME_HEIGHT = 128
+local FRAME_WIDTH = 128
 
--- dot notation here since instance is being created manually,
--- not receiving it as self
 function Player.new(x, y)
   -- creates an empty table, attach Player as its metatable, and name self
   local self = setmetatable({}, Player)
@@ -16,9 +14,26 @@ function Player.new(x, y)
   self.x = x
   self.y = y
   self.width = 32
-  self.height = 48
+  self.height = 80
   self.vy = 0 -- vertical velocity, changes each frame
   self.isGrounded = false
+
+  -- Load spritesheet and build quads
+  self.sheet = love.graphics.newImage('sprites/Shinobi/Idle.png')
+  self.quads = {}
+  self.currentFrame = 1
+  self.frameTimer = 0
+  self.frameInterval = 0.12 -- seconds per frame
+
+  for i = 0, 5 do           -- 6 frames, 0 indexed
+    self.quads[i + 1] = love.graphics.newQuad(
+      i * FRAME_WIDTH,
+      0,
+      FRAME_WIDTH,
+      FRAME_HEIGHT,
+      self.sheet:getDimensions()
+    )
+  end
 
   return self
 end
@@ -47,6 +62,13 @@ function Player:update(dt, world)
     if self:overlaps(tile) then
       self:resolveCollision(tile)
     end
+  end
+
+  -- Advance animation frame
+  self.frameTimer = self.frameTimer + dt
+  if self.frameTimer >= self.frameInterval then
+    self.frameTimer = self.frameTimer - self.frameInterval
+    self.currentFrame = (self.currentFrame % 6) + 1
   end
 end
 
@@ -95,8 +117,20 @@ function Player:jump()
 end
 
 function Player:draw()
-  love.graphics.setColor(0, 0.8, 1)
-  love.graphics.rectangle('fill', self.x, self.y, self.width, self.height)
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.draw(
+    self.sheet,
+    self.quads[self.currentFrame],
+    self.x - 48,
+    self.y - 48,
+    0,
+    1,
+    1
+  )
+
+  -- debug: draw collision box (remove later)
+  love.graphics.setColor(1, 0, 0, 0.5)
+  love.graphics.rectangle('line', self.x, self.y, self.width, self.height)
   love.graphics.setColor(1, 1, 1)
 end
 
