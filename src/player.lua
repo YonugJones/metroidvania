@@ -17,6 +17,7 @@ function Player.new(x, y)
   self.height = 80
   self.vy = 0 -- vertical velocity, changes each frame
   self.isGrounded = false
+  self.isFacingRight = true
 
   -- Load spritesheet and build quads
   self.sheet = love.graphics.newImage('sprites/Shinobi/Idle.png')
@@ -43,8 +44,10 @@ function Player:update(dt, world)
   -- Horizontal movement
   if love.keyboard.isDown('left') then
     self.x = self.x - MOVE_SPEED * dt
+    self.isFacingRight = false
   elseif love.keyboard.isDown('right') then
     self.x = self.x + MOVE_SPEED * dt
+    self.isFacingRight = true
   end
 
   -- Apply gravity
@@ -117,14 +120,18 @@ function Player:jump()
 end
 
 function Player:draw()
+  -- lua ternary operator
+  local scaleX = self.isFacingRight and 1 or -1
+  local offsetX = self.isFacingRight and 0 or FRAME_WIDTH
+
   love.graphics.setColor(1, 1, 1)
   love.graphics.draw(
     self.sheet,
     self.quads[self.currentFrame],
-    self.x - 48,
+    self.x - 48 + offsetX,
     self.y - 48,
     0,
-    1,
+    scaleX,
     1
   )
 
