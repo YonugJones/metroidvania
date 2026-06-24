@@ -4,37 +4,56 @@ Player.__index = Player
 local MOVE_SPEED = 200
 local GRAVITY = 800 -- pixels per second squared, pulls player down
 local JUMP_FORCE = -400
-local FRAME_HEIGHT = 128
-local FRAME_WIDTH = 128
+local ANIMS = {
+  idle = {
+    file        = 'sprites/Shinobi/Idle.png',
+    frameWidth  = 128,
+    frameHeight = 128,
+    totalFrames = 6,
+    interval    = 0.12,
+  },
+  run = {
+    file        = 'sprites/Shinobi/Run.png',
+    frameWidth  = 128,
+    frameHeight = 128,
+    totalFrames = 8,
+    interval    = 0.07,
+  },
+}
 
 function Player.new(x, y)
   -- creates an empty table, attach Player as its metatable, and name self
-  local self = setmetatable({}, Player)
+  local self         = setmetatable({}, Player)
 
-  self.x = x
-  self.y = y
-  self.width = 32
-  self.height = 80
-  self.vy = 0 -- vertical velocity, changes each frame
-  self.isGrounded = false
+  self.x             = x
+  self.y             = y
+  self.width         = 32
+  self.height        = 80
+  self.vy            = 0 -- vertical velocity, changes each frame
+  self.isGrounded    = false
   self.isFacingRight = true
 
-  -- Load spritesheet and build quads
-  self.sheet = love.graphics.newImage('sprites/Shinobi/Idle.png')
-  self.quads = {}
-  self.currentFrame = 1
-  self.frameTimer = 0
-  self.frameInterval = 0.12 -- seconds per frame
+  -- Load all spritesheets and build quads
+  self.sheets        = {}
+  self.quads         = {}
 
-  for i = 0, 5 do           -- 6 frames, 0 indexed
-    self.quads[i + 1] = love.graphics.newQuad(
-      i * FRAME_WIDTH,
-      0,
-      FRAME_WIDTH,
-      FRAME_HEIGHT,
-      self.sheet:getDimensions()
-    )
+  for name, def in pairs(ANIMS) do
+    self.sheets[name] = love.graphics.newImage(def.file)
+    self.quads[name]  = {}
+    for i = 0, def.totalFrames - 1 do
+      self.quads[name][i + 1] = love.graphics.newQuad(
+        i * def.frameWidth,
+        0,
+        def.frameWidth,
+        def.frameHeight,
+        self.sheets[name]:getDimensions()
+      )
+    end
   end
+
+  self.state        = 'idle'
+  self.currentFrame = 1
+  self.frameTimer   = 0
 
   return self
 end
@@ -68,11 +87,28 @@ function Player:update(dt, world)
   end
 
   -- Advance animation frame
+  local def = ANIMS[self.state]
   self.frameTimer = self.frameTimer + dt
-  if self.frameTimer >= self.frameInterval then
-    self.frameTimer = self.frameTimer - self.frameInterval
-    self.currentFrame = (self.currentFrame % 6) + 1
+  if self.frameTimer >= def.interval then
+    self.frameTimer   = self.frameTimer - def.interval
+    self.currentFrame = (self.currentFrame % def.totalFrames) + 1
   end
+
+  -- Switch state based on movement
+  if not self.isGrounded then
+    self:setState('idle') -- jump anim later
+  elseif love.keyboard.isDown('left') or love.keyboard.isDown('right') then
+    self:setState('run')
+  else
+    self:setState('idle')
+  end
+end
+
+function Player:setState(newState)
+  if self.state == newState then return end
+  self.state        = newState
+  self.currentFrame = 1
+  self.frameTimer   = 0
 end
 
 -- Returns true if player rectangle overlaps a tile rectangle
@@ -120,14 +156,14 @@ function Player:jump()
 end
 
 function Player:draw()
-  -- lua ternary operator
-  local scaleX = self.isFacingRight and 1 or -1
-  local offsetX = self.isFacingRight and 0 or FRAME_WIDTH
+  local def     = ANIMS[self.state]
+  local scaleX  = self.isFacingRight and 1 or -1
+  local offsetX = self.isFacingRight and 0 or def.frameWidth
 
   love.graphics.setColor(1, 1, 1)
   love.graphics.draw(
-    self.sheet,
-    self.quads[self.currentFrame],
+    self.sheets[self.state],
+    self.quads[self.state][self.currentFrame],
     self.x - 48 + offsetX,
     self.y - 48,
     0,
@@ -135,7 +171,7 @@ function Player:draw()
     1
   )
 
-  -- debug: draw collision box (remove later)
+  -- debug collision box
   love.graphics.setColor(1, 0, 0, 0.5)
   love.graphics.rectangle('line', self.x, self.y, self.width, self.height)
   love.graphics.setColor(1, 1, 1)
