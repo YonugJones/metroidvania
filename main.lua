@@ -29,3 +29,9 @@ function love.keypressed(key)
     love.event.quit()
   end
 end
+
+function love.keyreleased(key)
+  if key == 'space' then
+    player.jumpHeld = false
+  end
+end

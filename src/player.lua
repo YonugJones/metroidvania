@@ -1,16 +1,20 @@
-local Player = {}
-Player.__index = Player
+local Player          = {}
+Player.__index        = Player
 
-local MOVE_SPEED = 200
-local GRAVITY = 800 -- pixels per second squared, pulls player down
-local JUMP_FORCE = -400
-local ANIMS = {
+local MOVE_SPEED      = 200
+local GRAVITY         = 800 -- pixels per second squared, pulls player down
+local JUMP_FORCE      = -400
+local JUMP_HOLD_FORCE = -600
+local MAX_JUMP_TIME   = 0.2
+
+local ANIMS           = {
   idle = {
     file        = 'sprites/Shinobi/Idle.png',
     frameWidth  = 128,
     frameHeight = 128,
     totalFrames = 6,
     interval    = 0.12,
+    loop        = true,
   },
   run = {
     file        = 'sprites/Shinobi/Run.png',
@@ -18,6 +22,25 @@ local ANIMS = {
     frameHeight = 128,
     totalFrames = 8,
     interval    = 0.07,
+    loop        = true,
+  },
+  jump_up = {
+    file        = 'sprites/Shinobi/Jump.png',
+    frameWidth  = 128,
+    frameHeight = 128,
+    totalFrames = 6,
+    interval    = 0.07,
+    sheetOffset = 0,
+    loop        = false, -- hold on last frame
+  },
+  jump_down = {
+    file        = 'sprites/Shinobi/Jump.png',
+    frameWidth  = 128,
+    frameHeight = 128,
+    totalFrames = 6,
+    interval    = 0.07,
+    sheetOffset = 6,
+    loop        = false, -- hold on last frame
   },
 }
 
@@ -29,20 +52,27 @@ function Player.new(x, y)
   self.y             = y
   self.width         = 32
   self.height        = 80
-  self.vy            = 0 -- vertical velocity, changes each frame
+  self.vy            = 0
   self.isGrounded    = false
   self.isFacingRight = true
+  self.jumpHeld      = false
+  self.jumpTimer     = 0
 
   -- Load all spritesheets and build quads
   self.sheets        = {}
   self.quads         = {}
 
   for name, def in pairs(ANIMS) do
-    self.sheets[name] = love.graphics.newImage(def.file)
+    if not self.sheets[def.file] then
+      self.sheets[def.file] = love.graphics.newImage(def.file)
+    end
+
+    self.sheets[name] = self.sheets[def.file]
     self.quads[name]  = {}
+    local offset      = def.sheetOffset or 0
     for i = 0, def.totalFrames - 1 do
       self.quads[name][i + 1] = love.graphics.newQuad(
-        i * def.frameWidth,
+        (offset + i) * def.frameWidth,
         0,
         def.frameWidth,
         def.frameHeight,
@@ -58,7 +88,6 @@ function Player.new(x, y)
   return self
 end
 
--- Colon notation to avoid manually passing self into function
 function Player:update(dt, world)
   -- Horizontal movement
   if love.keyboard.isDown('left') then
@@ -67,6 +96,16 @@ function Player:update(dt, world)
   elseif love.keyboard.isDown('right') then
     self.x = self.x + MOVE_SPEED * dt
     self.isFacingRight = true
+  end
+
+  -- Variable jump extension
+  if self.jumpHeld then
+    if love.keyboard.isDown('space') and self.jumpTimer < MAX_JUMP_TIME then
+      self.vy        = self.vy + JUMP_HOLD_FORCE * dt
+      self.jumpTimer = self.jumpTimer + dt
+    else
+      self.jumpHeld = false
+    end
   end
 
   -- Apply gravity
@@ -90,13 +129,23 @@ function Player:update(dt, world)
   local def = ANIMS[self.state]
   self.frameTimer = self.frameTimer + dt
   if self.frameTimer >= def.interval then
-    self.frameTimer   = self.frameTimer - def.interval
-    self.currentFrame = (self.currentFrame % def.totalFrames) + 1
+    self.frameTimer = self.frameTimer - def.interval
+    local nextFrame = (self.currentFrame % def.totalFrames) + 1
+    -- if loop is false, hold on last frame instead of wrapping
+    if not def.loop and self.currentFrame == def.totalFrames then
+      -- do nothing stay on last frame
+    else
+      self.currentFrame = nextFrame
+    end
   end
 
   -- Switch state based on movement
   if not self.isGrounded then
-    self:setState('idle') -- jump anim later
+    if self.vy < 0 then
+      self:setState('jump_up')
+    else
+      self:setState('jump_down')
+    end
   elseif love.keyboard.isDown('left') or love.keyboard.isDown('right') then
     self:setState('run')
   else
@@ -151,7 +200,8 @@ end
 function Player:jump()
   if self.isGrounded then
     self.vy = JUMP_FORCE
-    self.isGrounded = false
+    self.jumpHeld = true
+    self.jumpTimer = 0
   end
 end
 
