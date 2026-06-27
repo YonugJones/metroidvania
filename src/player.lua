@@ -1,14 +1,15 @@
-local Player          = {}
-Player.__index        = Player
+local Player               = {}
+Player.__index             = Player
 
-local MOVE_SPEED      = 200
-local GRAVITY         = 800 -- pixels per second squared, pulls player down
-local JUMP_FORCE      = -400
-local JUMP_HOLD_FORCE = -600
-local MAX_JUMP_TIME   = 0.2
-local ATTACK_STATES   = { 'attack1', 'attack2', 'attack3' }
+local MOVE_SPEED           = 200
+local GRAVITY              = 800 -- pixels per second squared, pulls player down
+local JUMP_FORCE           = -400
+local JUMP_HOLD_FORCE      = -600
+local MAX_JUMP_TIME        = 0.2
+local ATTACK_STATES        = { 'attack1', 'attack2', 'attack3' }
+local ATTACK_RECOVERY_TIME = 0.3 -- seconds of vulnerability after combo ends
 
-local ANIMS           = {
+local ANIMS                = {
   idle = {
     file        = 'sprites/Shinobi/Idle.png',
     frameWidth  = 128,
@@ -85,6 +86,8 @@ function Player.new(x, y)
   self.isLocked       = false -- true while attack animation plays
   self.attackChain    = 0     -- which hit in the combo (1, 2, 3)
   self.attackBuffered = false -- true if v was pressed during attack
+  self.recoveryTimer  = 0
+  self.isRevovering   = false
 
   -- Load all spritesheets and build quads
   self.sheets         = {}
@@ -157,6 +160,15 @@ function Player:update(dt, world)
     end
   end
 
+  -- Recovery after attack combo
+  if self.isRevovering then
+    self.recoveryTimer = self.recoveryTimer - dt
+    if self.recoveryTimer <= 0 then
+      self.isRevovering = false
+      self.isLocked = false
+    end
+  end
+
   -- Advance animation frame
   local def = ANIMS[self.state]
   self.frameTimer = self.frameTimer + dt
@@ -171,19 +183,6 @@ function Player:update(dt, world)
       self:onAnimationEnd()
     end
   end
-
-  -- Switch state based on movement
-  -- if not self.isGrounded then
-  --   if self.vy < 0 then
-  --     self:setState('jump_up')
-  --   else
-  --     self:setState('jump_down')
-  --   end
-  -- elseif love.keyboard.isDown('left') or love.keyboard.isDown('right') then
-  --   self:setState('run')
-  -- else
-  --   self:setState('idle')
-  -- end
 
   if self.isLocked then
     -- attack animation is playing so do not switch state
@@ -222,9 +221,10 @@ function Player:onAnimationEnd()
     end
   elseif self.state == 'attack3' then
     -- end of chain
-    self.isLocked       = false
     self.attackChain    = 0
     self.attackBuffered = false
+    self.isRevovering   = true
+    self.recoveryTimer  = ATTACK_RECOVERY_TIME
     self:setState('idle')
   end
 end
@@ -275,11 +275,11 @@ function Player:jump()
 end
 
 function Player:attack()
-  if not self.isLocked then
+  if not self.isLocked and not self.isRevovering then
     self.isLocked    = true
     self.attackChain = 1
     self:setState('attack1')
-  elseif self.attackChain < 3 then
+  elseif self.isLocked and self.attackChain < 3 then
     -- buffer the next hit
     self.attackBuffered = true
   end
