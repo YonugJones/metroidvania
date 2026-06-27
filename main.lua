@@ -25,6 +25,10 @@ function love.keypressed(key)
     player:jump()
   end
 
+  if key == 'v' then
+    player:attack()
+  end
+
   if key == 'escape' then
     love.event.quit()
   end

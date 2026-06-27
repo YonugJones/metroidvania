@@ -6,6 +6,7 @@ local GRAVITY         = 800 -- pixels per second squared, pulls player down
 local JUMP_FORCE      = -400
 local JUMP_HOLD_FORCE = -600
 local MAX_JUMP_TIME   = 0.2
+local ATTACK_STATES   = { 'attack1', 'attack2', 'attack3' }
 
 local ANIMS           = {
   idle = {
@@ -42,25 +43,52 @@ local ANIMS           = {
     sheetOffset = 6,
     loop        = false, -- hold on last frame
   },
+  attack1 = {
+    file        = 'sprites/Shinobi/Attack_1.png',
+    frameWidth  = 128,
+    frameHeight = 128,
+    totalFrames = 5,
+    interval    = 0.07,
+    loop        = false
+  },
+  attack2 = {
+    file        = 'sprites/Shinobi/Attack_2.png',
+    frameWidth  = 128,
+    frameHeight = 128,
+    totalFrames = 3,
+    interval    = 0.07,
+    loop        = false
+  },
+  attack3 = {
+    file        = 'sprites/Shinobi/Attack_3.png',
+    frameWidth  = 128,
+    frameHeight = 128,
+    totalFrames = 4,
+    interval    = 0.07,
+    loop        = false
+  },
 }
 
 function Player.new(x, y)
   -- creates an empty table, attach Player as its metatable, and name self
-  local self         = setmetatable({}, Player)
+  local self          = setmetatable({}, Player)
 
-  self.x             = x
-  self.y             = y
-  self.width         = 32
-  self.height        = 80
-  self.vy            = 0
-  self.isGrounded    = false
-  self.isFacingRight = true
-  self.jumpHeld      = false
-  self.jumpTimer     = 0
+  self.x              = x
+  self.y              = y
+  self.width          = 32
+  self.height         = 80
+  self.vy             = 0
+  self.isGrounded     = false
+  self.isFacingRight  = true
+  self.jumpHeld       = false
+  self.jumpTimer      = 0
+  self.isLocked       = false -- true while attack animation plays
+  self.attackChain    = 0     -- which hit in the combo (1, 2, 3)
+  self.attackBuffered = false -- true if v was pressed during attack
 
   -- Load all spritesheets and build quads
-  self.sheets        = {}
-  self.quads         = {}
+  self.sheets         = {}
+  self.quads          = {}
 
   for name, def in pairs(ANIMS) do
     if not self.sheets[def.file] then
@@ -91,11 +119,15 @@ end
 function Player:update(dt, world)
   -- Horizontal movement
   if love.keyboard.isDown('left') then
-    self.x = self.x - MOVE_SPEED * dt
     self.isFacingRight = false
+    if not self.isLocked then
+      self.x = self.x - MOVE_SPEED * dt
+    end
   elseif love.keyboard.isDown('right') then
-    self.x = self.x + MOVE_SPEED * dt
     self.isFacingRight = true
+    if not self.isLocked then
+      self.x = self.x + MOVE_SPEED * dt
+    end
   end
 
   -- Variable jump extension
@@ -130,17 +162,32 @@ function Player:update(dt, world)
   self.frameTimer = self.frameTimer + dt
   if self.frameTimer >= def.interval then
     self.frameTimer = self.frameTimer - def.interval
-    local nextFrame = (self.currentFrame % def.totalFrames) + 1
-    -- if loop is false, hold on last frame instead of wrapping
-    if not def.loop and self.currentFrame == def.totalFrames then
-      -- do nothing stay on last frame
+
+    if def.loop then
+      self.currentFrame = (self.currentFrame % def.totalFrames) + 1
+    elseif self.currentFrame < def.totalFrames then
+      self.currentFrame = self.currentFrame + 1
     else
-      self.currentFrame = nextFrame
+      self:onAnimationEnd()
     end
   end
 
   -- Switch state based on movement
-  if not self.isGrounded then
+  -- if not self.isGrounded then
+  --   if self.vy < 0 then
+  --     self:setState('jump_up')
+  --   else
+  --     self:setState('jump_down')
+  --   end
+  -- elseif love.keyboard.isDown('left') or love.keyboard.isDown('right') then
+  --   self:setState('run')
+  -- else
+  --   self:setState('idle')
+  -- end
+
+  if self.isLocked then
+    -- attack animation is playing so do not switch state
+  elseif not self.isGrounded then
     if self.vy < 0 then
       self:setState('jump_up')
     else
@@ -158,6 +205,28 @@ function Player:setState(newState)
   self.state        = newState
   self.currentFrame = 1
   self.frameTimer   = 0
+end
+
+function Player:onAnimationEnd()
+  if self.state == 'attack1' or self.state == 'attack2' then
+    if self.attackBuffered then
+      -- advance to next hit in chain
+      self.attackBuffered = false
+      self.attackChain    = self.attackChain + 1
+      self:setState(ATTACK_STATES[self.attackChain])
+    else
+      -- no buffered attack input, unlock and return to idel
+      self.isLocked    = false
+      self.attackChain = 0
+      self:setState('idle')
+    end
+  elseif self.state == 'attack3' then
+    -- end of chain
+    self.isLocked       = false
+    self.attackChain    = 0
+    self.attackBuffered = false
+    self:setState('idle')
+  end
 end
 
 -- Returns true if player rectangle overlaps a tile rectangle
@@ -199,9 +268,20 @@ end
 
 function Player:jump()
   if self.isGrounded then
-    self.vy = JUMP_FORCE
-    self.jumpHeld = true
+    self.vy        = JUMP_FORCE
+    self.jumpHeld  = true
     self.jumpTimer = 0
+  end
+end
+
+function Player:attack()
+  if not self.isLocked then
+    self.isLocked    = true
+    self.attackChain = 1
+    self:setState('attack1')
+  elseif self.attackChain < 3 then
+    -- buffer the next hit
+    self.attackBuffered = true
   end
 end
 
