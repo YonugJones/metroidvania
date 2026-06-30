@@ -22,7 +22,7 @@ end
 
 function love.keypressed(key)
   if key == 'space' then
-    player:jump()
+    player:pressJump()
   end
 
   if key == 'v' then

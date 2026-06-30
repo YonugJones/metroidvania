@@ -8,6 +8,8 @@ local JUMP_HOLD_FORCE      = -600
 local MAX_JUMP_TIME        = 0.2
 local ATTACK_STATES        = { 'attack1', 'attack2', 'attack3' }
 local ATTACK_RECOVERY_TIME = 0.3 -- seconds of vulnerability after combo ends
+local COYOTE_TIME          = 0.1 -- seconds you can still jump after walking off a ledge
+local JUMP_BUFFER          = 0.1 -- seconds before landing that a jump input is remembered
 
 local ANIMS                = {
   idle = {
@@ -71,27 +73,28 @@ local ANIMS                = {
 }
 
 function Player.new(x, y)
-  -- creates an empty table, attach Player as its metatable, and name self
-  local self          = setmetatable({}, Player)
+  local self           = setmetatable({}, Player)
 
-  self.x              = x
-  self.y              = y
-  self.width          = 32
-  self.height         = 80
-  self.vy             = 0
-  self.isGrounded     = false
-  self.isFacingRight  = true
-  self.jumpHeld       = false
-  self.jumpTimer      = 0
-  self.isLocked       = false -- true while attack animation plays
-  self.attackChain    = 0     -- which hit in the combo (1, 2, 3)
-  self.attackBuffered = false -- true if v was pressed during attack
-  self.recoveryTimer  = 0
-  self.isRevovering   = false
+  self.x               = x
+  self.y               = y
+  self.width           = 32
+  self.height          = 80
+  self.vy              = 0
+  self.isGrounded      = false
+  self.isFacingRight   = true
+  self.jumpHeld        = false
+  self.jumpTimer       = 0
+  self.isLocked        = false -- true while attack animation plays
+  self.attackChain     = 0     -- which hit in the combo (1, 2, 3)
+  self.attackBuffered  = false -- true if v was pressed during attack
+  self.recoveryTimer   = 0
+  self.isRecovering    = false
+  self.coyoteTimer     = 0
+  self.jumpBufferTimer = 0
 
   -- Load all spritesheets and build quads
-  self.sheets         = {}
-  self.quads          = {}
+  self.sheets          = {}
+  self.quads           = {}
 
   for name, def in pairs(ANIMS) do
     if not self.sheets[def.file] then
@@ -160,11 +163,29 @@ function Player:update(dt, world)
     end
   end
 
+  -- Coyote time: count down after leaving the ground
+  if self.isGrounded then
+    self.coyoteTimer = COYOTE_TIME -- Keep refreshing while grounded
+  else
+    self.coyoteTimer = self.coyoteTimer - dt
+  end
+
+  -- Jump buffer: count down after space is pressed
+  if self.jumpBufferTimer > 0 then
+    self.jumpBufferTimer = self.jumpBufferTimer - dt
+  end
+
+  -- Auto jump if buffer is still active when landing
+  if self.isGrounded and self.jumpBufferTimer > 0 then
+    self:jump()
+    self.jumpBufferTimer = 0
+  end
+
   -- Recovery after attack combo
-  if self.isRevovering then
+  if self.isRecovering then
     self.recoveryTimer = self.recoveryTimer - dt
     if self.recoveryTimer <= 0 then
-      self.isRevovering = false
+      self.isRecovering = false
       self.isLocked = false
     end
   end
@@ -223,7 +244,7 @@ function Player:onAnimationEnd()
     -- end of chain
     self.attackChain    = 0
     self.attackBuffered = false
-    self.isRevovering   = true
+    self.isRecovering   = true
     self.recoveryTimer  = ATTACK_RECOVERY_TIME
     self:setState('idle')
   end
@@ -266,16 +287,22 @@ function Player:resolveCollision(tile)
   end
 end
 
+function Player:pressJump()
+  self.jumpBufferTimer = JUMP_BUFFER
+  self:jump()
+end
+
 function Player:jump()
-  if self.isGrounded then
-    self.vy        = JUMP_FORCE
-    self.jumpHeld  = true
-    self.jumpTimer = 0
+  if self.coyoteTimer > 0 then
+    self.vy          = JUMP_FORCE
+    self.jumpHeld    = true
+    self.jumpTimer   = 0
+    self.coyoteTimer = 0
   end
 end
 
 function Player:attack()
-  if not self.isLocked and not self.isRevovering then
+  if not self.isLocked and not self.isRecovering then
     self.isLocked    = true
     self.attackChain = 1
     self:setState('attack1')
