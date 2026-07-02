@@ -1,11 +1,13 @@
-local Player               = {}
-Player.__index             = Player
+local Entity   = require('src/entity')
+
+local Player   = {}
+Player.__index = Player
+setmetatable(Player, { __index = Entity }) -- Player falls back to Entity
 
 local MOVE_SPEED           = 350
 local DASH_SPEED           = 900
 local DASH_DURATION        = 0.2
 local DASH_COOLDOWN        = 0.8
-local GRAVITY              = 1500 -- pixels per second squared, pulls player down
 local JUMP_FORCE           = -400 -- jump height
 local JUMP_HOLD_FORCE      = -600 -- jump hold height
 local MAX_JUMP_TIME        = 0.2
@@ -75,72 +77,46 @@ local ANIMS                = {
   },
 }
 
+local SPRITE_OFFSET_X      = -48
+local SPRITE_OFFSET_Y      = -48
+
 function Player.new(x, y)
-  local self           = setmetatable({}, Player)
-  -- Position --
-  self.x               = x
-  self.y               = y
-  self.width           = 32
-  self.height          = 80
-  self.isFacingRight   = true
-  -- Vertical --
-  self.vy              = 0
-  self.isGrounded      = false
+  local self = Entity.new(x, y, 32, 80, ANIMS)
+  setmetatable(self, Player)
+  Player.__index       = Player
+
+  -- Jump --
   self.jumpHeld        = false
   self.jumpTimer       = 0
-  self.coyoteTimer     = 0
+  self.coyoteTimer     = COYOTE_TIME
   self.jumpBufferTimer = 0
-  -- State --
-  self.isLocked        = false -- true while attack animation plays
-  self.attackChain     = 0     -- which hit in the combo (1, 2, 3)
-  self.attackBuffered  = false -- true if v was pressed during attack
+
+  -- Attack --
+  self.isLocked        = false
+  self.attackChain     = 0
+  self.attackBuffered  = false
   self.recoveryTimer   = 0
   self.isRecovering    = false
+
   -- Dash --
   self.isDashing       = false
   self.dashTimer       = 0
   self.dashCooldown    = 0
-  self.dashAlpha       = 1 -- transparency
+  self.dashAlpha       = 1
 
-  -- Load all spritesheets and build quads --
-  self.sheets          = {}
-  self.quads           = {}
-
-  for name, def in pairs(ANIMS) do
-    if not self.sheets[def.file] then
-      self.sheets[def.file] = love.graphics.newImage(def.file)
-    end
-
-    self.sheets[name] = self.sheets[def.file]
-    self.quads[name]  = {}
-    local offset      = def.sheetOffset or 0
-    for i = 0, def.totalFrames - 1 do
-      self.quads[name][i + 1] = love.graphics.newQuad(
-        (offset + i) * def.frameWidth,
-        0,
-        def.frameWidth,
-        def.frameHeight,
-        self.sheets[name]:getDimensions()
-      )
-    end
-  end
-
-  self.state        = 'idle'
-  self.currentFrame = 1
-  self.frameTimer   = 0
-
+  self:setState('idle')
   return self
 end
 
 function Player:update(dt, world, effects)
   -- Horizontal movement --
   if love.keyboard.isDown('a') then
-    self.isFacingRight = false
+    self.isFacingRight = false -- Always update direction (attacking)
     if not self.isLocked then
       self.x = self.x - MOVE_SPEED * dt
     end
   elseif love.keyboard.isDown('d') then
-    self.isFacingRight = true
+    self.isFacingRight = true -- Always update direction (attacking)
     if not self.isLocked then
       self.x = self.x + MOVE_SPEED * dt
     end
@@ -148,12 +124,11 @@ function Player:update(dt, world, effects)
 
   -- Dash --
   if self.isDashing then
-    local dir = self.isFacingRight and 1 or -1
-    self.x = self.x + DASH_SPEED * dir * dt
+    local dir      = self.isFacingRight and 1 or -1
+    self.x         = self.x + DASH_SPEED * dir * dt
+    self.vy        = 0 -- no gravity
 
-    self.vy = 0 -- no gravity
-
-    -- fase out first half, fade in second half
+    -- Fade out first half, fade in second half
     local progress = 1 - (self.dashTimer / DASH_DURATION)
     if progress < 0.5 then
       self.dashAlpha = 1 - (progress * 2)                 -- 1 → 0.2
@@ -163,8 +138,8 @@ function Player:update(dt, world, effects)
 
     self.dashTimer = self.dashTimer - dt
     if self.dashTimer <= 0 then
-      self.isDashing = false
-      self.dashAlpha = 1
+      self.isDashing    = false
+      self.dashAlpha    = 1
       self.dashCooldown = DASH_COOLDOWN
     end
   end
@@ -178,9 +153,6 @@ function Player:update(dt, world, effects)
         local cx = self.x + self.width / 2
         local cy = self.y + self.height / 2
         effects:addDashReady(cx, cy)
-      else
-        -- add this temporarily
-        love.graphics.print("EFFECTS IS NIL", 10, 100)
       end
     end
   end
@@ -195,29 +167,23 @@ function Player:update(dt, world, effects)
     end
   end
 
-  self.vy = self.vy + GRAVITY * dt -- Apply gravity
-  self.y = self.y + self.vy * dt   -- Apply vertical velocity
-  self.isGrounded = false          -- Reset grounded state each frame before checking
+  -- Physics + Collision via Entity --
+  self:updatePhysics(dt, world)
 
-  -- Check collision --
-  local tiles = world:getTiles()
-  for _, tile in ipairs(tiles) do
-    if self:overlaps(tile) then
-      self:resolveCollision(tile)
-    end
-  end
-
-  if self.isGrounded then          -- Coyote time: count down after leaving the ground
-    self.coyoteTimer = COYOTE_TIME -- Keep refreshing while grounded
+  -- Coyote time --
+  if self.isGrounded then
+    self.coyoteTimer = COYOTE_TIME
   else
     self.coyoteTimer = self.coyoteTimer - dt
   end
 
-  if self.jumpBufferTimer > 0 then -- Jump buffer: count down after space is pressed
+  -- Jump buffer countdown --
+  if self.jumpBufferTimer > 0 then
     self.jumpBufferTimer = self.jumpBufferTimer - dt
   end
 
-  if self.isGrounded and self.jumpBufferTimer > 0 then -- Auto jump if buffer is still active when landing
+  -- Auto jump landing
+  if self.isGrounded and self.jumpBufferTimer > 0 then
     self:jump()
     self.jumpBufferTimer = 0
   end
@@ -231,26 +197,14 @@ function Player:update(dt, world, effects)
     end
   end
 
-  -- Advance animation frame --
-  local def = ANIMS[self.state]
-  self.frameTimer = self.frameTimer + dt
-  if self.frameTimer >= def.interval then
-    self.frameTimer = self.frameTimer - def.interval
+  -- Animation --
+  self:updateAnimation(dt)
 
-    if def.loop then
-      self.currentFrame = (self.currentFrame % def.totalFrames) + 1
-    elseif self.currentFrame < def.totalFrames then
-      self.currentFrame = self.currentFrame + 1
-    else
-      self:onAnimationEnd()
-    end
-  end
-
-  -- Switch state block--
+  -- State machine --
   if self.isDashing then
     self:setState('run')
-  elseif self.isLocked then -- attack animation playing
-    -- do nothing --
+  elseif self.isLocked then
+    -- do nothing
   elseif not self.isGrounded and self.coyoteTimer <= 0 then
     if self.vy < 0 then
       self:setState('jump_up')
@@ -262,13 +216,6 @@ function Player:update(dt, world, effects)
   else
     self:setState('idle')
   end
-end
-
-function Player:setState(newState)
-  if self.state == newState then return end
-  self.state        = newState
-  self.currentFrame = 1
-  self.frameTimer   = 0
 end
 
 -- Does it loop or hold the last frame (like a jump)? --
@@ -289,39 +236,6 @@ function Player:onAnimationEnd()
     self.isRecovering   = true
     self.recoveryTimer  = ATTACK_RECOVERY_TIME
     self:setState('idle')
-  end
-end
-
--- Returns true if player rectangle overlaps a tile rectangle
-function Player:overlaps(tile)
-  return self.x < tile.x + tile.width
-      and self.x + self.width > tile.x
-      and self.y < tile.y + tile.height
-      and self.y + self.height > tile.y
-end
-
--- Pushes player out of a tile based on which side they entered from
-function Player:resolveCollision(tile)
-  -- How far we're overlapping on each axis
-  local overlapLeft   = (self.x + self.width) - tile.x
-  local overlapRight  = (tile.x + tile.width) - self.x
-  local overlapTop    = (self.y + self.height) - tile.y
-  local overlapBottom = (tile.y + tile.height) - self.y
-
-  -- Find the smallest overlap — that's the axis to resolve on
-  local minOverlap    = math.min(overlapLeft, overlapRight, overlapTop, overlapBottom)
-
-  if minOverlap == overlapTop then -- Player hit the top of a tile — ⬇
-    self.y          = tile.y - self.height
-    self.vy         = 0
-    self.isGrounded = true
-  elseif minOverlap == overlapBottom then -- Player hit the bottom of a tile ⬆
-    self.y  = tile.y + tile.height
-    self.vy = 0
-  elseif minOverlap == overlapLeft then  -- Player hit the left side of a tile |◀
-    self.x = tile.x - self.width
-  elseif minOverlap == overlapRight then -- Player hit the right side of a tile ▶|
-    self.x = tile.x + tile.width
   end
 end
 
@@ -351,34 +265,16 @@ function Player:attack()
 end
 
 function Player:dash()
-  print("dash() called")
   if not self.isDashing and self.dashCooldown <= 0 and not self.isLocked then
-    print("dash started")
     self.isDashing = true
     self.dashTimer = DASH_DURATION
   end
 end
 
 function Player:draw()
-  local def     = ANIMS[self.state]
-  local scaleX  = self.isFacingRight and 1 or -1
-  local offsetX = self.isFacingRight and 0 or def.frameWidth
-
   love.graphics.setColor(1, 1, 1, self.dashAlpha)
-  love.graphics.draw(
-    self.sheets[self.state],
-    self.quads[self.state][self.currentFrame],
-    self.x - 48 + offsetX,
-    self.y - 48,
-    0,
-    scaleX,
-    1
-  )
-
-  -- debug collision box
-  love.graphics.setColor(1, 0, 0, 0.5)
-  love.graphics.rectangle('line', self.x, self.y, self.width, self.height)
-  love.graphics.setColor(1, 1, 1)
+  Entity.draw(self, SPRITE_OFFSET_X, SPRITE_OFFSET_Y)
+  love.graphics.setColor(1, 1, 1, 1)
 end
 
 return Player
