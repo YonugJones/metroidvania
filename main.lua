@@ -4,7 +4,7 @@ local Camera = require('src.camera')
 
 function love.load()
   world = World.new()
-  player = Player.new(100, 100)
+  player = Player.new(200, 200)
   camera = Camera.new()
 end
 
@@ -14,8 +14,8 @@ function love.update(dt)
 end
 
 function love.draw()
+  world:draw(camera)
   camera:attach()
-  world:draw()
   player:draw()
   camera:detach()
 end

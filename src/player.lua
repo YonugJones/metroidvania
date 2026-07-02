@@ -1,10 +1,10 @@
 local Player               = {}
 Player.__index             = Player
 
-local MOVE_SPEED           = 200
-local GRAVITY              = 800 -- pixels per second squared, pulls player down
-local JUMP_FORCE           = -400
-local JUMP_HOLD_FORCE      = -600
+local MOVE_SPEED           = 400
+local GRAVITY              = 1500 -- pixels per second squared, pulls player down
+local JUMP_FORCE           = -600 -- jump height
+local JUMP_HOLD_FORCE      = -200 -- jump hold height
 local MAX_JUMP_TIME        = 0.2
 local ATTACK_STATES        = { 'attack1', 'attack2', 'attack3' }
 local ATTACK_RECOVERY_TIME = 0.3 -- seconds of vulnerability after combo ends
@@ -206,8 +206,8 @@ function Player:update(dt, world)
   end
 
   if self.isLocked then
-    -- attack animation is playing so do not switch state
-  elseif not self.isGrounded then
+    -- attack animation playing
+  elseif not self.isGrounded and self.coyoteTimer <= 0 then
     if self.vy < 0 then
       self:setState('jump_up')
     else
