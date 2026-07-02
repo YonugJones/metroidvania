@@ -1,10 +1,13 @@
 local Player               = {}
 Player.__index             = Player
 
-local MOVE_SPEED           = 400
+local MOVE_SPEED           = 350
+local DASH_SPEED           = 900
+local DASH_DURATION        = 0.2
+local DASH_COOLDOWN        = 0.8
 local GRAVITY              = 1500 -- pixels per second squared, pulls player down
-local JUMP_FORCE           = -600 -- jump height
-local JUMP_HOLD_FORCE      = -200 -- jump hold height
+local JUMP_FORCE           = -400 -- jump height
+local JUMP_HOLD_FORCE      = -600 -- jump hold height
 local MAX_JUMP_TIME        = 0.2
 local ATTACK_STATES        = { 'attack1', 'attack2', 'attack3' }
 local ATTACK_RECOVERY_TIME = 0.3 -- seconds of vulnerability after combo ends
@@ -74,25 +77,32 @@ local ANIMS                = {
 
 function Player.new(x, y)
   local self           = setmetatable({}, Player)
-
+  -- Position --
   self.x               = x
   self.y               = y
   self.width           = 32
   self.height          = 80
+  self.isFacingRight   = true
+  -- Vertical --
   self.vy              = 0
   self.isGrounded      = false
-  self.isFacingRight   = true
   self.jumpHeld        = false
   self.jumpTimer       = 0
+  self.coyoteTimer     = 0
+  self.jumpBufferTimer = 0
+  -- State --
   self.isLocked        = false -- true while attack animation plays
   self.attackChain     = 0     -- which hit in the combo (1, 2, 3)
   self.attackBuffered  = false -- true if v was pressed during attack
   self.recoveryTimer   = 0
   self.isRecovering    = false
-  self.coyoteTimer     = 0
-  self.jumpBufferTimer = 0
+  -- Dash --
+  self.isDashing       = false
+  self.dashTimer       = 0
+  self.dashCooldown    = 0
+  self.dashAlpha       = 1 -- transparency
 
-  -- Load all spritesheets and build quads
+  -- Load all spritesheets and build quads --
   self.sheets          = {}
   self.quads           = {}
 
@@ -122,21 +132,60 @@ function Player.new(x, y)
   return self
 end
 
-function Player:update(dt, world)
-  -- Horizontal movement
-  if love.keyboard.isDown('left') then
+function Player:update(dt, world, effects)
+  -- Horizontal movement --
+  if love.keyboard.isDown('a') then
     self.isFacingRight = false
     if not self.isLocked then
       self.x = self.x - MOVE_SPEED * dt
     end
-  elseif love.keyboard.isDown('right') then
+  elseif love.keyboard.isDown('d') then
     self.isFacingRight = true
     if not self.isLocked then
       self.x = self.x + MOVE_SPEED * dt
     end
   end
 
-  -- Variable jump extension
+  -- Dash --
+  if self.isDashing then
+    local dir = self.isFacingRight and 1 or -1
+    self.x = self.x + DASH_SPEED * dir * dt
+
+    self.vy = 0 -- no gravity
+
+    -- fase out first half, fade in second half
+    local progress = 1 - (self.dashTimer / DASH_DURATION)
+    if progress < 0.5 then
+      self.dashAlpha = 1 - (progress * 2)                 -- 1 → 0.2
+    else
+      self.dashAlpha = 0.2 + ((progress - 0.5) * 2 * 0.8) -- 0.2 → 1
+    end
+
+    self.dashTimer = self.dashTimer - dt
+    if self.dashTimer <= 0 then
+      self.isDashing = false
+      self.dashAlpha = 1
+      self.dashCooldown = DASH_COOLDOWN
+    end
+  end
+
+  -- Cooldown --
+  if self.dashCooldown > 0 then
+    self.dashCooldown = self.dashCooldown - dt
+    if self.dashCooldown <= 0 then
+      self.dashCooldown = 0
+      if effects then
+        local cx = self.x + self.width / 2
+        local cy = self.y + self.height / 2
+        effects:addDashReady(cx, cy)
+      else
+        -- add this temporarily
+        love.graphics.print("EFFECTS IS NIL", 10, 100)
+      end
+    end
+  end
+
+  -- Variable jump extension --
   if self.jumpHeld then
     if love.keyboard.isDown('space') and self.jumpTimer < MAX_JUMP_TIME then
       self.vy        = self.vy + JUMP_HOLD_FORCE * dt
@@ -146,16 +195,11 @@ function Player:update(dt, world)
     end
   end
 
-  -- Apply gravity
-  self.vy = self.vy + GRAVITY * dt
+  self.vy = self.vy + GRAVITY * dt -- Apply gravity
+  self.y = self.y + self.vy * dt   -- Apply vertical velocity
+  self.isGrounded = false          -- Reset grounded state each frame before checking
 
-  -- Apply vertical velocity
-  self.y = self.y + self.vy * dt
-
-  -- Reset grounded state each frame before checking
-  self.isGrounded = false
-
-  -- Check collision against all solid tiles
+  -- Check collision --
   local tiles = world:getTiles()
   for _, tile in ipairs(tiles) do
     if self:overlaps(tile) then
@@ -163,25 +207,22 @@ function Player:update(dt, world)
     end
   end
 
-  -- Coyote time: count down after leaving the ground
-  if self.isGrounded then
+  if self.isGrounded then          -- Coyote time: count down after leaving the ground
     self.coyoteTimer = COYOTE_TIME -- Keep refreshing while grounded
   else
     self.coyoteTimer = self.coyoteTimer - dt
   end
 
-  -- Jump buffer: count down after space is pressed
-  if self.jumpBufferTimer > 0 then
+  if self.jumpBufferTimer > 0 then -- Jump buffer: count down after space is pressed
     self.jumpBufferTimer = self.jumpBufferTimer - dt
   end
 
-  -- Auto jump if buffer is still active when landing
-  if self.isGrounded and self.jumpBufferTimer > 0 then
+  if self.isGrounded and self.jumpBufferTimer > 0 then -- Auto jump if buffer is still active when landing
     self:jump()
     self.jumpBufferTimer = 0
   end
 
-  -- Recovery after attack combo
+  -- Recovery after attack combo --
   if self.isRecovering then
     self.recoveryTimer = self.recoveryTimer - dt
     if self.recoveryTimer <= 0 then
@@ -190,7 +231,7 @@ function Player:update(dt, world)
     end
   end
 
-  -- Advance animation frame
+  -- Advance animation frame --
   local def = ANIMS[self.state]
   self.frameTimer = self.frameTimer + dt
   if self.frameTimer >= def.interval then
@@ -205,15 +246,18 @@ function Player:update(dt, world)
     end
   end
 
-  if self.isLocked then
-    -- attack animation playing
+  -- Switch state block--
+  if self.isDashing then
+    self:setState('run')
+  elseif self.isLocked then -- attack animation playing
+    -- do nothing --
   elseif not self.isGrounded and self.coyoteTimer <= 0 then
     if self.vy < 0 then
       self:setState('jump_up')
     else
       self:setState('jump_down')
     end
-  elseif love.keyboard.isDown('left') or love.keyboard.isDown('right') then
+  elseif love.keyboard.isDown('a') or love.keyboard.isDown('d') then
     self:setState('run')
   else
     self:setState('idle')
@@ -227,21 +271,19 @@ function Player:setState(newState)
   self.frameTimer   = 0
 end
 
+-- Does it loop or hold the last frame (like a jump)? --
 function Player:onAnimationEnd()
   if self.state == 'attack1' or self.state == 'attack2' then
-    if self.attackBuffered then
-      -- advance to next hit in chain
+    if self.attackBuffered then -- advance to next hit in chain
       self.attackBuffered = false
       self.attackChain    = self.attackChain + 1
       self:setState(ATTACK_STATES[self.attackChain])
-    else
-      -- no buffered attack input, unlock and return to idel
+    else -- no buffered attack input, unlock and return to idel
       self.isLocked    = false
       self.attackChain = 0
       self:setState('idle')
     end
-  elseif self.state == 'attack3' then
-    -- end of chain
+  elseif self.state == 'attack3' then -- end of chain
     self.attackChain    = 0
     self.attackBuffered = false
     self.isRecovering   = true
@@ -269,20 +311,16 @@ function Player:resolveCollision(tile)
   -- Find the smallest overlap — that's the axis to resolve on
   local minOverlap    = math.min(overlapLeft, overlapRight, overlapTop, overlapBottom)
 
-  if minOverlap == overlapTop then
-    -- Player hit the top of a tile — land on it
+  if minOverlap == overlapTop then -- Player hit the top of a tile — ⬇
     self.y          = tile.y - self.height
     self.vy         = 0
     self.isGrounded = true
-  elseif minOverlap == overlapBottom then
-    -- Player hit the bottom of a tile — bump head
+  elseif minOverlap == overlapBottom then -- Player hit the bottom of a tile ⬆
     self.y  = tile.y + tile.height
     self.vy = 0
-  elseif minOverlap == overlapLeft then
-    -- Player hit the left side of a tile
+  elseif minOverlap == overlapLeft then  -- Player hit the left side of a tile |◀
     self.x = tile.x - self.width
-  elseif minOverlap == overlapRight then
-    -- Player hit the right side of a tile
+  elseif minOverlap == overlapRight then -- Player hit the right side of a tile ▶|
     self.x = tile.x + tile.width
   end
 end
@@ -312,12 +350,21 @@ function Player:attack()
   end
 end
 
+function Player:dash()
+  print("dash() called")
+  if not self.isDashing and self.dashCooldown <= 0 and not self.isLocked then
+    print("dash started")
+    self.isDashing = true
+    self.dashTimer = DASH_DURATION
+  end
+end
+
 function Player:draw()
   local def     = ANIMS[self.state]
   local scaleX  = self.isFacingRight and 1 or -1
   local offsetX = self.isFacingRight and 0 or def.frameWidth
 
-  love.graphics.setColor(1, 1, 1)
+  love.graphics.setColor(1, 1, 1, self.dashAlpha)
   love.graphics.draw(
     self.sheets[self.state],
     self.quads[self.state][self.currentFrame],
