@@ -1,4 +1,5 @@
-local Entity   = require('src/entity')
+local Entity   = require('src.entity')
+local Debug    = require('src.debug')
 
 local Player   = {}
 Player.__index = Player
@@ -186,7 +187,7 @@ function Player:update(dt, world, effects)
       self.dashCooldown = DASH_COOLDOWN
       if self.dashHeld then
         self.isSprinting = true
-        table.insert(debugLines, 'sprinting started')
+        Debug.log('isSprinting', self.isSprinting)
       end
     end
   end
@@ -194,7 +195,6 @@ function Player:update(dt, world, effects)
   -- Sprint --
   if self.isSprinting and not self.dashHeld then
     self.isSprinting = false
-    table.insert(debugLines, "sprint stopped")
   end
 
   -- Cooldown --
@@ -262,9 +262,9 @@ function Player:update(dt, world, effects)
   self:updateAnimation(dt)
 
   -- Debug --
-  table.insert(debugLines, "isSprinting: " .. tostring(self.isSprinting))
-  table.insert(debugLines, "dashHeld: " .. tostring(self.dashHeld))
-  table.insert(debugLines, "state: " .. tostring(self.state))
+  Debug.log('state', self.state)
+  Debug.log('isSprinting', self.isSprinting)
+  Debug.log('dashHeld', self.dashHeld)
 
   -- State machine --
   if self.isDashing then

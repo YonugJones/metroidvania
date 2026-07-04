@@ -2,6 +2,7 @@ local Player = require('src.player')
 local World = require('src.world')
 local Camera = require('src.camera')
 local Effects = require('src.effects')
+local Debug = require('src.debug')
 
 debugLines = {}
 
@@ -24,16 +25,12 @@ function love.draw()
   player:draw()
   effects:draw()
   camera:detach()
-
-
-  -- debug
-  love.graphics.setColor(1, 1, 1)
-  for i, line in ipairs(debugLines) do
-    love.graphics.print(line, 10, 10 + (i - 1) * 18)
-  end
-  debugLines = {}
-
-  table.insert(debugLines, "draw running: " .. tostring(player.isSprinting))
+  Debug:draw()
+  love.graphics.print('P: debug', 5, 100)
+  love.graphics.print('WASD: move', 5, 118)
+  love.graphics.print('J: dash/sprint', 5, 136)
+  love.graphics.print('K: attack', 5, 154)
+  love.graphics.print('SPACE: jump', 5, 172)
 end
 
 function love.keypressed(key)
@@ -52,6 +49,10 @@ function love.keypressed(key)
 
   if key == 'e' then
     effects:addDashReady(player.x, player.y)
+  end
+
+  if key == 'p' then
+    Debug.toggle()
   end
 
   if key == 'escape' then
