@@ -38,6 +38,14 @@ local ANIMS           = {
     interval    = 0.05,
     loop        = true
   },
+  dash = {
+    file        = 'sprites/SAMURAI/DASH.png',
+    frameWidth  = 96,
+    frameHeight = 96,
+    totalFrames = 8,
+    interval    = 0.04,
+    loop        = false
+  },
   sprint = {
     file        = 'sprites/SAMURAI/RUN.png',
     frameWidth  = 96,
@@ -78,13 +86,13 @@ local ANIMS           = {
     interval    = 0.07,
     loop        = false
   },
-  dash = {
-    file        = 'sprites/SAMURAI/DASH.png',
-    frameWidth  = 96,
+  air_attack = {
+    file = 'sprites/SAMURAI/AIR-ATTACK.png',
+    frameWidth = 96,
     frameHeight = 96,
-    totalFrames = 8,
-    interval    = 0.04,
-    loop        = false
+    totalFrames = 6,
+    interval = 0.07,
+    loop = false
   },
   attack1 = {
     file        = 'sprites/SAMURAI/ATTACK-1.png',
@@ -186,12 +194,12 @@ function Player:update(dt, world, effects)
     end
   end
 
-  -- Sprint --
+  -- sprint check --
   if self.isSprinting and not self.dashHeld then
     self.isSprinting = false
   end
 
-  -- Cooldown --
+  -- Dash cooldown --
   if self.dashCooldown > 0 then
     self.dashCooldown = self.dashCooldown - dt
     if self.dashCooldown <= 0 then
@@ -235,31 +243,26 @@ function Player:update(dt, world, effects)
     self.jumpBufferTimer = 0
   end
 
-  -- Recovery after attack combo --
-  -- if self.isRecovering then
-  --   self.recoveryTimer = self.recoveryTimer - dt
-  --   if self.recoveryTimer <= 0 then
-  --     self.isRecovering = false
-  --     self.isLocked = false
-  --   end
-  -- end
-
   -- Animation --
   self:updateAnimation(dt)
 
   -- State machine --
   if self.isDashing then
     self:setState('dash')
+  elseif self.isGrounded and self.state == 'air_attack' then
+    self.isLocked = false
+    self.attackChain = 0
+    self:setState('idle')
   elseif self.isLocked then
     -- do nothing
   elseif not self.isGrounded and self.coyoteTimer <= 0 then
-    -- only set jump states if not already in a jump chain
     local inJumpChain = self.state == 'jump_start'
         or self.state == 'jump'
         or self.state == 'jump_transition'
         or self.state == 'jump_fall'
+        or self.state == 'air_attack'
     if not inJumpChain then
-      self:setState('jump_fall') -- fallback if airborne outside jump chain
+      self:setState('jump_fall')
     end
   elseif self.isSprinting and self.dashHeld then
     self:setState('sprint')
@@ -308,6 +311,10 @@ function Player:onAnimationEnd()
     self.attackChain    = 0
     self.attackBuffered = false
     self:setState('idle')
+  elseif self.state == 'air_attack' then
+    self.isLocked = false
+    self.attackChain = 0
+    self:setState('jump_fall')
   end
 end
 
@@ -331,15 +338,17 @@ function Player:jump()
 end
 
 function Player:attack()
-  if not self.isLocked and not self.isRecovering then
-    self.isLocked    = true
-    -- self.earlyInput  = false
+  if not self.isGrounded and not self.isLocked then
+    -- air attack --
+    self.isLocked = true
+    self.attackChain = 0
+    self:setState('air_attack')
+  elseif self.isGrounded and not self.isLocked then
+    -- ground attack --
+    self.isLocked = true
     self.attackChain = 1
     self:setState('attack1')
-  elseif self.isLocked and self.attackChain < 3 and not self.attackBuffered then
-    -- local def           = ANIMS[self.state]
-    -- local progress      = self.currentFrame / def.totalFrames
-    -- self.earlyInput     = progress >= 0.6
+  elseif self.isGrounded and self.isLocked and self.attackChain < 3 and not self.attackBuffered then
     self.attackBuffered = true
   end
 end
