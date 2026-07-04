@@ -50,21 +50,19 @@ end
 
 function Entity:setState(newState)
   if self.state == newState then return end
-  self.state        = newState
-  self.currentFrame = 1
-  self.frameTimer   = 0
+  self.state         = newState
+  self.currentFrame  = 1
+  self.frameTimer    = 0
+  self.frameInterval = nil
 end
 
 function Entity:updatePhysics(dt, world)
   -- Apply gravity --
   self.vy = self.vy + GRAVITY * dt
-
   -- Apply vertical velocity --
   self.y = self.y + self.vy * dt
-
   -- Reset grounded state --
   self.isGrounded = false
-
   -- Tile collision --
   local tiles = world:getTiles()
   for _, tile in ipairs(tiles) do
@@ -77,10 +75,11 @@ end
 function Entity:updateAnimation(dt)
   local def = self.anims[self.state]
   if not def then return end
+  local interval = self.frameInterval or def.interval
 
   self.frameTimer = self.frameTimer + dt
   if self.frameTimer >= def.interval then
-    self.frameTimer = self.frameTimer - def.interval
+    self.frameTimer = self.frameTimer - interval
 
     if def.loop then
       self.currentFrame = (self.currentFrame % def.totalFrames) + 1
@@ -144,10 +143,10 @@ function Entity:draw(spriteOffsetX, spriteOffsetY, scaleX, scaleY)
     scaleY
   )
 
-  -- debug collision box
-  love.graphics.setColor(1, 0, 0, 0.5)
-  love.graphics.rectangle('line', self.x, self.y, self.width, self.height)
-  love.graphics.setColor(1, 1, 1)
+  -- -- debug collision box
+  -- love.graphics.setColor(1, 0, 0, 0.5)
+  -- love.graphics.rectangle('line', self.x, self.y, self.width, self.height)
+  -- love.graphics.setColor(1, 1, 1)
 end
 
 return Entity
