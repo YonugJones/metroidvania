@@ -8,18 +8,16 @@ setmetatable(Player, { __index = Entity }) -- Player falls back to Entity
 local SCALE_X         = 2.5
 local SCALE_Y         = 2.5
 local MOVE_SPEED      = 350
-local SPRINT_SPEED    = 600
-local DASH_SPEED      = 1000
+local SPRINT_SPEED    = 500
+local DASH_SPEED      = 1200
 local DASH_DURATION   = 0.2
 local DASH_COOLDOWN   = 1
 local JUMP_FORCE      = -200  -- jump height
 local JUMP_HOLD_FORCE = -3000 -- jump hold height
 local MAX_JUMP_TIME   = 0.2
+local COYOTE_TIME     = 0.1   -- seconds you can still jump after walking off a ledge
+local JUMP_BUFFER     = 0.1   -- seconds before landing that a jump input is remembered
 local ATTACK_STATES   = { 'attack1', 'attack2', 'attack3' }
--- local COMBO_RECOVERY_TIME = 0.3 -- only final hit has recovery
-local COYOTE_TIME     = 0.1 -- seconds you can still jump after walking off a ledge
-local JUMP_BUFFER     = 0.1 -- seconds before landing that a jump input is remembered
-
 
 local ANIMS           = {
   idle = {
@@ -109,7 +107,7 @@ local ANIMS           = {
     frameHeight = 96,
     sheetOffset = 0,
     totalFrames = 7,
-    interval    = 0.07,
+    interval    = 0.05,
     loop        = false
   },
   attack3 = {
@@ -156,14 +154,14 @@ end
 function Player:update(dt, world, effects)
   -- Horizontal movement --
   if love.keyboard.isDown('a') then
-    self.isFacingRight = false -- Always update direction (attacking)
-    if not self.isLocked then
+    self.isFacingRight = false
+    if not self.isLocked or self.state == 'air_attack' then
       local speed = self.isSprinting and SPRINT_SPEED or MOVE_SPEED
       self.x = self.x - speed * dt
     end
   elseif love.keyboard.isDown('d') then
-    self.isFacingRight = true -- Always update direction (attacking)
-    if not self.isLocked then
+    self.isFacingRight = true
+    if not self.isLocked or self.state == 'air_attack' then
       local speed = self.isSprinting and SPRINT_SPEED or MOVE_SPEED
       self.x = self.x + speed * dt
     end
@@ -195,7 +193,8 @@ function Player:update(dt, world, effects)
   end
 
   -- sprint check --
-  if self.isSprinting and not self.dashHeld then
+  local isMoving = love.keyboard.isDown('a') or love.keyboard.isDown('d')
+  if self.isSprinting and (not self.dashHeld or not isMoving) then
     self.isSprinting = false
   end
 
@@ -250,7 +249,7 @@ function Player:update(dt, world, effects)
   if self.isDashing then
     self:setState('dash')
   elseif self.isGrounded and self.state == 'air_attack' then
-    self.isLocked = false
+    self.isLocked    = false
     self.attackChain = 0
     self:setState('idle')
   elseif self.isLocked then
@@ -264,7 +263,7 @@ function Player:update(dt, world, effects)
     if not inJumpChain then
       self:setState('jump_fall')
     end
-  elseif self.isSprinting and self.dashHeld then
+  elseif self.isSprinting and self.dashHeld and isMoving then
     self:setState('sprint')
   elseif love.keyboard.isDown('a') or love.keyboard.isDown('d') then
     self:setState('run')
@@ -274,21 +273,17 @@ function Player:update(dt, world, effects)
 
   -- Debug --
   Debug.log('state', self.state)
-  Debug.log('isSprinting', self.isSprinting)
-  Debug.log('dashHeld', self.dashHeld)
 end
 
 function Player:onAnimationEnd()
-  -- Jump --
   if self.state == 'jump_start' then
     self:setState('jump')
   elseif self.state == 'jump' then
     self:setState('jump_transition')
   elseif self.state == 'jump_transition' then
     self:setState('jump_fall')
-    -- Dash --
-  elseif self.state == 'dash' then -- no action needed, handled in Player:dash()
-    -- Attack --
+  elseif self.state == 'dash' then
+    -- no action needed
   elseif self.state == 'attack1' or self.state == 'attack2' then
     if self.attackBuffered then
       self.attackBuffered = false
@@ -312,7 +307,7 @@ function Player:onAnimationEnd()
     self.attackBuffered = false
     self:setState('idle')
   elseif self.state == 'air_attack' then
-    self.isLocked = false
+    self.isLocked    = false
     self.attackChain = 0
     self:setState('jump_fall')
   end
@@ -330,7 +325,6 @@ function Player:jump()
     self.jumpTimer      = 0
     self.coyoteTimer    = 0
     self.isLocked       = false
-    -- self.isRecovering   = false
     self.attackChain    = 0
     self.attackBuffered = false
     self:setState('jump_start')
@@ -339,13 +333,11 @@ end
 
 function Player:attack()
   if not self.isGrounded and not self.isLocked then
-    -- air attack --
-    self.isLocked = true
+    self.isLocked    = true
     self.attackChain = 0
     self:setState('air_attack')
   elseif self.isGrounded and not self.isLocked then
-    -- ground attack --
-    self.isLocked = true
+    self.isLocked    = true
     self.attackChain = 1
     self:setState('attack1')
   elseif self.isGrounded and self.isLocked and self.attackChain < 3 and not self.attackBuffered then

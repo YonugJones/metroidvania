@@ -142,11 +142,6 @@ function Entity:draw(spriteOffsetX, spriteOffsetY, scaleX, scaleY)
     flipX * scaleX,
     scaleY
   )
-
-  -- -- debug collision box
-  -- love.graphics.setColor(1, 0, 0, 0.5)
-  -- love.graphics.rectangle('line', self.x, self.y, self.width, self.height)
-  -- love.graphics.setColor(1, 1, 1)
 end
 
 return Entity

@@ -4,8 +4,6 @@ local Camera = require('src.camera')
 local Effects = require('src.effects')
 local Debug = require('src.debug')
 
-debugLines = {}
-
 function love.load()
   world = World.new()
   player = Player.new(200, 200)
@@ -25,7 +23,7 @@ function love.draw()
   player:draw()
   effects:draw()
   camera:detach()
-  Debug:draw()
+  Debug.draw()
   love.graphics.print('P: debug', 5, 100)
   love.graphics.print('WASD: move', 5, 118)
   love.graphics.print('J: dash/sprint', 5, 136)
@@ -45,10 +43,6 @@ function love.keypressed(key)
 
   if key == 'k' then
     player:attack()
-  end
-
-  if key == 'e' then
-    effects:addDashReady(player.x, player.y)
   end
 
   if key == 'p' then
