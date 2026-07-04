@@ -4,8 +4,10 @@ local Player   = {}
 Player.__index = Player
 setmetatable(Player, { __index = Entity }) -- Player falls back to Entity
 
+local SCALE_X              = 2.5
+local SCALE_Y              = 2.5
 local MOVE_SPEED           = 350
-local DASH_SPEED           = 900
+local DASH_SPEED           = 1200
 local DASH_DURATION        = 0.2
 local DASH_COOLDOWN        = 0.8
 local JUMP_FORCE           = -400 -- jump height
@@ -13,96 +15,123 @@ local JUMP_HOLD_FORCE      = -600 -- jump hold height
 local MAX_JUMP_TIME        = 0.2
 local ATTACK_STATES        = { 'attack1', 'attack2', 'attack3' }
 local ATTACK_RECOVERY_TIME = 0.3 -- seconds of vulnerability after combo ends
+local COMBO_BUFFER_TIMER   = 0
 local COYOTE_TIME          = 0.1 -- seconds you can still jump after walking off a ledge
 local JUMP_BUFFER          = 0.1 -- seconds before landing that a jump input is remembered
 
 local ANIMS                = {
   idle = {
-    file        = 'sprites/Shinobi/Idle.png',
-    frameWidth  = 128,
-    frameHeight = 128,
-    totalFrames = 6,
+    file        = 'sprites/SAMURAI/IDLE.png',
+    frameWidth  = 96,
+    frameHeight = 96,
+    totalFrames = 10,
     interval    = 0.12,
-    loop        = true,
+    loop        = true
   },
   run = {
-    file        = 'sprites/Shinobi/Run.png',
-    frameWidth  = 128,
-    frameHeight = 128,
-    totalFrames = 8,
-    interval    = 0.07,
-    loop        = true,
+    file        = 'sprites/SAMURAI/RUN.png',
+    frameWidth  = 96,
+    frameHeight = 96,
+    totalFrames = 16,
+    interval    = 0.05,
+    loop        = true
   },
-  jump_up = {
-    file        = 'sprites/Shinobi/Jump.png',
-    frameWidth  = 128,
-    frameHeight = 128,
-    totalFrames = 6,
+  jump_start = {
+    file        = 'sprites/SAMURAI/JUMP-START.png',
+    frameWidth  = 96,
+    frameHeight = 96,
+    totalFrames = 3,
     interval    = 0.07,
-    sheetOffset = 0,
-    loop        = false, -- hold on last frame
+    loop        = true
   },
-  jump_down = {
-    file        = 'sprites/Shinobi/Jump.png',
-    frameWidth  = 128,
-    frameHeight = 128,
-    totalFrames = 6,
-    interval    = 0.07,
-    sheetOffset = 6,
-    loop        = false, -- hold on last frame
-  },
-  attack1 = {
-    file        = 'sprites/Shinobi/Attack_1.png',
-    frameWidth  = 128,
-    frameHeight = 128,
-    totalFrames = 5,
-    interval    = 0.07,
-    loop        = false
-  },
-  attack2 = {
-    file        = 'sprites/Shinobi/Attack_2.png',
-    frameWidth  = 128,
-    frameHeight = 128,
+  jump = {
+    file        = 'sprites/SAMURAI/JUMP.png',
+    frameWidth  = 96,
+    frameHeight = 96,
     totalFrames = 3,
     interval    = 0.07,
     loop        = false
   },
+  jump_transition = {
+    file        = 'sprites/SAMURAI/JUMP-TRANSITION.png',
+    frameWidth  = 96,
+    frameHeight = 96,
+    totalFrames = 3,
+    interval    = 0.07,
+    loop        = false
+  },
+  jump_fall = {
+    file        = 'sprites/SAMURAI/JUMP-FALL.png',
+    frameWidth  = 96,
+    frameHeight = 96,
+    totalFrames = 3,
+    interval    = 0.07,
+    loop        = false
+  },
+  dash = {
+    file        = 'sprites/SAMURAI/DASH.png',
+    frameWidth  = 96,
+    frameHeight = 96,
+    totalFrames = 8,
+    interval    = 0.04,
+    loop        = false
+  },
+  attack1 = {
+    file        = 'sprites/SAMURAI/ATTACK-1.png',
+    frameWidth  = 96,
+    frameHeight = 96,
+    sheetOffset = 3,
+    totalFrames = 4,
+    interval    = 0.05,
+    loop        = false
+  },
+  attack2 = {
+    file        = 'sprites/SAMURAI/ATTACK-2.png',
+    frameWidth  = 96,
+    frameHeight = 96,
+    sheetOffset = 1,
+    totalFrames = 4,
+    interval    = 0.07,
+    loop        = false
+  },
   attack3 = {
-    file        = 'sprites/Shinobi/Attack_3.png',
-    frameWidth  = 128,
-    frameHeight = 128,
+    file        = 'sprites/SAMURAI/ATTACK-3.png',
+    frameWidth  = 96,
+    frameHeight = 96,
+    sheetOffset = 1,
     totalFrames = 4,
     interval    = 0.07,
     loop        = false
   },
 }
 
-local SPRITE_OFFSET_X      = -48
-local SPRITE_OFFSET_Y      = -48
+local SPRITE_OFFSET_X      = -105
+local SPRITE_OFFSET_Y      = -120
 
 function Player.new(x, y)
-  local self = Entity.new(x, y, 32, 80, ANIMS)
+  local self = Entity.new(x, y, 40, 80, ANIMS)
   setmetatable(self, Player)
-  Player.__index       = Player
+  Player.__index        = Player
 
   -- Jump --
-  self.jumpHeld        = false
-  self.jumpTimer       = 0
-  self.coyoteTimer     = COYOTE_TIME
-  self.jumpBufferTimer = 0
+  self.jumpHeld         = false
+  self.jumpTimer        = 0
+  self.coyoteTimer      = COYOTE_TIME
+  self.jumpBufferTimer  = 0
 
   -- Attack --
-  self.isLocked        = false
-  self.attackChain     = 0
-  self.attackBuffered  = false
-  self.recoveryTimer   = 0
-  self.isRecovering    = false
+  self.isLocked         = false
+  self.attackChain      = 0
+  self.attackBuffered   = false
+  self.comboBufferTimer = 0
+  self.isRecovering     = false
+  self.recoveryTimer    = 0
 
   -- Dash --
-  self.isDashing       = false
-  self.dashTimer       = 0
-  self.dashCooldown    = 0
-  self.dashAlpha       = 1
+  self.isDashing        = false
+  self.dashTimer        = 0
+  self.dashCooldown     = 0
+  self.dashAlpha        = 1
 
   self:setState('idle')
   return self
@@ -202,14 +231,17 @@ function Player:update(dt, world, effects)
 
   -- State machine --
   if self.isDashing then
-    self:setState('run')
+    self:setState('dash')
   elseif self.isLocked then
     -- do nothing
   elseif not self.isGrounded and self.coyoteTimer <= 0 then
-    if self.vy < 0 then
-      self:setState('jump_up')
-    else
-      self:setState('jump_down')
+    -- only set jump states if not already in a jump chain
+    local inJumpChain = self.state == 'jump_start'
+        or self.state == 'jump'
+        or self.state == 'jump_transition'
+        or self.state == 'jump_fall'
+    if not inJumpChain then
+      self:setState('jump_fall') -- fallback if airborne outside jump chain
     end
   elseif love.keyboard.isDown('a') or love.keyboard.isDown('d') then
     self:setState('run')
@@ -220,17 +252,28 @@ end
 
 -- Does it loop or hold the last frame (like a jump)? --
 function Player:onAnimationEnd()
-  if self.state == 'attack1' or self.state == 'attack2' then
-    if self.attackBuffered then -- advance to next hit in chain
+  if self.state == 'jump_start' then
+    self:setState('jump')
+  elseif self.state == 'jump' then
+    self:setState('jump_transition')
+  elseif self.state == 'jump_transition' then
+    self:setState('jump_fall')
+  elseif self.state == 'dash' then
+    self.isDashing    = false
+    self.dashAlpha    = 1
+    self.dashCooldown = DASH_COOLDOWN
+    self:setState('idle')
+  elseif self.state == 'attack1' or self.state == 'attack2' then
+    if self.attackBuffered then
       self.attackBuffered = false
       self.attackChain    = self.attackChain + 1
       self:setState(ATTACK_STATES[self.attackChain])
-    else -- no buffered attack input, unlock and return to idel
+    else
       self.isLocked    = false
       self.attackChain = 0
       self:setState('idle')
     end
-  elseif self.state == 'attack3' then -- end of chain
+  elseif self.state == 'attack3' then
     self.attackChain    = 0
     self.attackBuffered = false
     self.isRecovering   = true
@@ -250,17 +293,24 @@ function Player:jump()
     self.jumpHeld    = true
     self.jumpTimer   = 0
     self.coyoteTimer = 0
+    self:setState('jump_start')
   end
 end
 
 function Player:attack()
   if not self.isLocked and not self.isRecovering then
-    self.isLocked    = true
-    self.attackChain = 1
-    self:setState('attack1')
+    self.isLocked         = true
+    self.comboBufferTimer = 0
+    if self.attackChain == 0 then
+      self.attackChain = 1
+      self:setState('attack1')
+    end
   elseif self.isLocked and self.attackChain < 3 then
-    -- buffer the next hit
     self.attackBuffered = true
+  elseif not self.isLocked and self.comboBufferTimer > 0 then
+    self.isLocked = true
+    self.attackChain = self.attackChain + 1
+    self:setState(ATTACK_STATES[self.attackChain])
   end
 end
 
@@ -268,12 +318,13 @@ function Player:dash()
   if not self.isDashing and self.dashCooldown <= 0 and not self.isLocked then
     self.isDashing = true
     self.dashTimer = DASH_DURATION
+    self:setState('dash')
   end
 end
 
 function Player:draw()
   love.graphics.setColor(1, 1, 1, self.dashAlpha)
-  Entity.draw(self, SPRITE_OFFSET_X, SPRITE_OFFSET_Y)
+  Entity.draw(self, SPRITE_OFFSET_X, SPRITE_OFFSET_Y, SCALE_X, SCALE_Y)
   love.graphics.setColor(1, 1, 1, 1)
 end
 

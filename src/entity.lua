@@ -32,6 +32,7 @@ function Entity.new(x, y, width, height, anims)
 
     self.sheets[name] = self.sheets[def.file]
     self.quads[name]  = {}
+
     local offset      = def.sheetOffset or 0
     for i = 0, def.totalFrames - 1 do
       self.quads[name][i + 1] = love.graphics.newQuad(
@@ -123,12 +124,15 @@ function Entity:resolveCollision(tile)
   end
 end
 
-function Entity:draw(spriteOffsetX, spriteOffsetY)
+function Entity:draw(spriteOffsetX, spriteOffsetY, scaleX, scaleY)
   local def = self.anims[self.state]
   if not def then return end
 
-  local scaleX = self.isFacingRight and 1 or -1
-  local offsetX = self.isFacingRight and 0 or def.frameWidth
+  scaleX = scaleX or 1
+  scaleY = scaleY or 1
+
+  local flipX = self.isFacingRight and 1 or -1
+  local offsetX = self.isFacingRight and 0 or def.frameWidth * scaleX
 
   love.graphics.draw(
     self.sheets[self.state],
@@ -136,8 +140,8 @@ function Entity:draw(spriteOffsetX, spriteOffsetY)
     self.x + offsetX + (spriteOffsetX or 0),
     self.y + (spriteOffsetY or 0),
     0,
-    scaleX,
-    1
+    flipX * scaleX,
+    scaleY
   )
 
   -- debug collision box
