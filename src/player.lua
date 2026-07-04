@@ -6,15 +6,16 @@ setmetatable(Player, { __index = Entity }) -- Player falls back to Entity
 
 local SCALE_X              = 2.5
 local SCALE_Y              = 2.5
-local MOVE_SPEED           = 400
-local DASH_SPEED           = 1200
+local MOVE_SPEED           = 350
+local SPRINT_SPEED         = 600
+local DASH_SPEED           = 1000
 local DASH_DURATION        = 0.2
-local DASH_COOLDOWN        = 0.8
+local DASH_COOLDOWN        = 1
 local JUMP_FORCE           = -200  -- jump height
 local JUMP_HOLD_FORCE      = -3000 -- jump hold height
 local MAX_JUMP_TIME        = 0.2
 local ATTACK_STATES        = { 'attack1', 'attack2', 'attack3' }
-local ATTACK_RECOVERY_TIME = 0.4  -- seconds of vulnerability after first attack ends
+local ATTACK_RECOVERY_TIME = 0.5  -- seconds of vulnerability after first attack ends
 local COMBO_RECOVERY_TIME  = 0.25 -- seconds of vulternability after combo ends
 local COMBO_BUFFER_TIME    = 0.12
 local COYOTE_TIME          = 0.1  -- seconds you can still jump after walking off a ledge
@@ -27,7 +28,7 @@ local ANIMS           = {
     frameWidth  = 96,
     frameHeight = 96,
     totalFrames = 10,
-    interval    = 0.12,
+    interval    = 0.18,
     loop        = true
   },
   run = {
@@ -36,6 +37,14 @@ local ANIMS           = {
     frameHeight = 96,
     totalFrames = 16,
     interval    = 0.05,
+    loop        = true
+  },
+  sprint = {
+    file        = 'sprites/SAMURAI/RUN.png',
+    frameWidth  = 96,
+    frameHeight = 96,
+    totalFrames = 16,
+    interval    = 0.03,
     loop        = true
   },
   jump_start = {
@@ -82,27 +91,27 @@ local ANIMS           = {
     file        = 'sprites/SAMURAI/ATTACK-1.png',
     frameWidth  = 96,
     frameHeight = 96,
-    sheetOffset = 0,
-    totalFrames = 7,
-    interval    = 0.09,
+    sheetOffset = 3,
+    totalFrames = 4,
+    interval    = 0.05,
     loop        = false
   },
   attack2 = {
     file        = 'sprites/SAMURAI/ATTACK-2.png',
     frameWidth  = 96,
     frameHeight = 96,
-    sheetOffset = 0,
-    totalFrames = 7,
-    interval    = 0.09,
+    sheetOffset = 2,
+    totalFrames = 4,
+    interval    = 0.07,
     loop        = false
   },
   attack3 = {
     file        = 'sprites/SAMURAI/ATTACK-3.png',
     frameWidth  = 96,
     frameHeight = 96,
-    sheetOffset = 0,
-    totalFrames = 6,
-    interval    = 0.1,
+    sheetOffset = 2,
+    totalFrames = 3,
+    interval    = 0.07,
     loop        = false
   },
 }
@@ -113,7 +122,6 @@ local SPRITE_OFFSET_Y = -120
 function Player.new(x, y)
   local self = Entity.new(x, y, 40, 80, ANIMS)
   setmetatable(self, Player)
-  Player.__index        = Player
 
   -- Jump --
   self.jumpHeld         = false
@@ -134,6 +142,8 @@ function Player.new(x, y)
   self.dashTimer        = 0
   self.dashCooldown     = 0
   self.dashAlpha        = 1
+  self.dashHeld         = false
+  self.isSprinting      = false
 
   self:setState('idle')
   return self
@@ -144,12 +154,14 @@ function Player:update(dt, world, effects)
   if love.keyboard.isDown('a') then
     self.isFacingRight = false -- Always update direction (attacking)
     if not self.isLocked then
-      self.x = self.x - MOVE_SPEED * dt
+      local speed = self.isSprinting and SPRINT_SPEED or MOVE_SPEED
+      self.x = self.x - speed * dt
     end
   elseif love.keyboard.isDown('d') then
     self.isFacingRight = true -- Always update direction (attacking)
     if not self.isLocked then
-      self.x = self.x + MOVE_SPEED * dt
+      local speed = self.isSprinting and SPRINT_SPEED or MOVE_SPEED
+      self.x = self.x + speed * dt
     end
   end
 
@@ -172,7 +184,17 @@ function Player:update(dt, world, effects)
       self.isDashing    = false
       self.dashAlpha    = 1
       self.dashCooldown = DASH_COOLDOWN
+      if self.dashHeld then
+        self.isSprinting = true
+        table.insert(debugLines, 'sprinting started')
+      end
     end
+  end
+
+  -- Sprint --
+  if self.isSprinting and not self.dashHeld then
+    self.isSprinting = false
+    table.insert(debugLines, "sprint stopped")
   end
 
   -- Cooldown --
@@ -239,6 +261,11 @@ function Player:update(dt, world, effects)
   -- Animation --
   self:updateAnimation(dt)
 
+  -- Debug --
+  table.insert(debugLines, "isSprinting: " .. tostring(self.isSprinting))
+  table.insert(debugLines, "dashHeld: " .. tostring(self.dashHeld))
+  table.insert(debugLines, "state: " .. tostring(self.state))
+
   -- State machine --
   if self.isDashing then
     self:setState('dash')
@@ -253,6 +280,8 @@ function Player:update(dt, world, effects)
     if not inJumpChain then
       self:setState('jump_fall') -- fallback if airborne outside jump chain
     end
+  elseif self.isSprinting and self.dashHeld then
+    self:setState('sprint')
   elseif love.keyboard.isDown('a') or love.keyboard.isDown('d') then
     self:setState('run')
   else
@@ -261,25 +290,22 @@ function Player:update(dt, world, effects)
 end
 
 function Player:onAnimationEnd()
+  -- Jump --
   if self.state == 'jump_start' then
     self:setState('jump')
   elseif self.state == 'jump' then
     self:setState('jump_transition')
   elseif self.state == 'jump_transition' then
     self:setState('jump_fall')
-  elseif self.state == 'dash' then
-    self.isDashing    = false
-    self.dashAlpha    = 1
-    self.dashCooldown = DASH_COOLDOWN
-    self:setState('idle')
+    -- Dash --
+  elseif self.state == 'dash' then -- no action needed, handled in Player:dash()
+    -- Attack --
   elseif self.state == 'attack1' or self.state == 'attack2' then
     if self.attackBuffered then
-      -- Player continues combo --
       self.attackBuffered = false
       self.attackChain    = self.attackChain + 1
       self:setState(ATTACK_STATES[self.attackChain])
     else
-      -- Player stops combo and get's worse recovery --
       self.isLocked         = false
       self.isRecovering     = true
       self.recoveryTimer    = ATTACK_RECOVERY_TIME
@@ -288,7 +314,6 @@ function Player:onAnimationEnd()
       self:setState('idle')
     end
   elseif self.state == 'attack3' then
-    -- Full combo, lighter recovery --
     self.isLocked       = false
     self.isRecovering   = true
     self.recoveryTimer  = COMBO_RECOVERY_TIME
@@ -310,7 +335,7 @@ function Player:jump()
     self.jumpTimer      = 0
     self.coyoteTimer    = 0
     self.isLocked       = false
-    self.isRecovering   = true
+    self.isRecovering   = false
     self.attackChain    = 0
     self.attackBuffered = false
     self:setState('jump_start')

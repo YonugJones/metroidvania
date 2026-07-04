@@ -3,6 +3,8 @@ local World = require('src.world')
 local Camera = require('src.camera')
 local Effects = require('src.effects')
 
+debugLines = {}
+
 function love.load()
   world = World.new()
   player = Player.new(200, 200)
@@ -26,9 +28,12 @@ function love.draw()
 
   -- debug
   love.graphics.setColor(1, 1, 1)
-  love.graphics.print("active effects: " .. #effects.active, 10, 10)
-  love.graphics.print("dashCooldown: " .. string.format("%.2f", player.dashCooldown), 10, 28)
-  love.graphics.print("isDashing: " .. tostring(player.isDashing), 10, 46)
+  for i, line in ipairs(debugLines) do
+    love.graphics.print(line, 10, 10 + (i - 1) * 18)
+  end
+  debugLines = {}
+
+  table.insert(debugLines, "draw running: " .. tostring(player.isSprinting))
 end
 
 function love.keypressed(key)
@@ -37,7 +42,7 @@ function love.keypressed(key)
   end
 
   if key == 'j' then
-    print("j pressed")
+    player.dashHeld = true
     player:dash()
   end
 
@@ -57,5 +62,9 @@ end
 function love.keyreleased(key)
   if key == 'space' then
     player.jumpHeld = false
+  end
+
+  if key == 'j' then
+    player.dashHeld = false
   end
 end

@@ -1,7 +1,7 @@
 local Entity   = {}
 Entity.__index = Entity
 
-local GRAVITY  = 1500
+local GRAVITY  = 1800
 
 function Entity.new(x, y, width, height, anims)
   local self         = setmetatable({}, Entity)
