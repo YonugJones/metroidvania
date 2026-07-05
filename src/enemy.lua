@@ -5,13 +5,17 @@ local Enemy   = {}
 Enemy.__index = Enemy
 setmetatable(Enemy, { __index = Entity })
 
-local SCALE_X         = 2
-local SCALE_Y         = 2
-local WALK_SPEED      = 80
-local CHASE_SPEED     = 160
-local AGGRO_RANGE     = 300
-local ATTACK_RANGE    = 60
-local HEALTH          = 3
+local SCALE_X      = 2
+local SCALE_Y      = 2
+local WALK_SPEED   = 80
+local CHASE_SPEED  = 160
+local AGGRO_RANGE  = 400
+local ATTACK_RANGE = 60
+local HEALTH       = 3
+
+local function distanceTo(a, b)
+  return math.abs(a.x - b.x)
+end
 
 local ANIMS           = {
   idle = {
@@ -51,17 +55,33 @@ function Enemy.new(x, y)
 end
 
 function Enemy:update(dt, world, player)
-  -- AI --
+  local dist = distanceTo(self, player)
+
+  -- AI State transitions --
+  if dist <= ATTACK_RANGE then
+    self.aiState = 'attack'
+  elseif dist <= AGGRO_RANGE then
+    self.aiState = 'chase'
+  else
+    self.aiState = 'patrol'
+  end
+
+  -- AI Behavior --
   if self.aiState == 'patrol' then
     self.x = self.x + WALK_SPEED * self.patrolDir * dt
     self.isFacingRight = self.patrolDir == 1
 
-    -- turn around at patrol boundaries --
     if self.x > self.patrolOrigin + self.patrolDist then
       self.patrolDir = -1
     elseif self.x < self.patrolOrigin - self.patrolDist then
       self.patrolDir = 1
     end
+  elseif self.aiState == 'chase' then
+    local dir = player.x > self.x and 1 or -1
+    self.x = self.x + CHASE_SPEED * dir * dt
+    self.isFacingRight = dir == 1
+  elseif self.aiState == 'attack' then
+    -- attack logic here
   end
 
   self:updatePhysics(dt, world)
@@ -70,6 +90,8 @@ function Enemy:update(dt, world, player)
   -- state machine --
   if self.aiState == 'patrol' then
     self:setState('walk')
+  elseif self.aiState == 'chase' then
+    self:setState('walk') -- run next
   else
     self:setState('idle')
   end
