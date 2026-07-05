@@ -5,47 +5,46 @@ local Player   = {}
 Player.__index = Player
 setmetatable(Player, { __index = Entity }) -- Player falls back to Entity
 
-local SCALE_X         = 2.5
-local SCALE_Y         = 2.5
+local SCALE_X         = 3
+local SCALE_Y         = 3
 local MOVE_SPEED      = 350
-local SPRINT_SPEED    = 500
+local SPRINT_SPEED    = 600
 local DASH_SPEED      = 1200
 local DASH_DURATION   = 0.2
 local DASH_COOLDOWN   = 1
-local JUMP_FORCE      = -200  -- jump height
-local JUMP_HOLD_FORCE = -3000 -- jump hold height
-local MAX_JUMP_TIME   = 0.2
-local COYOTE_TIME     = 0.1   -- seconds you can still jump after walking off a ledge
-local JUMP_BUFFER     = 0.1   -- seconds before landing that a jump input is remembered
+local JUMP_FORCE      = -900 -- jump height
+local JUMP_CUT        = 0.4
+local COYOTE_TIME     = 0.1  -- seconds you can still jump after walking off a ledge
+local JUMP_BUFFER     = 0.1  -- seconds before landing that a jump input is remembered
 local ATTACK_STATES   = { 'attack1', 'attack2', 'attack3' }
 
 local ANIMS           = {
   idle = {
-    file        = 'sprites/SAMURAI/IDLE.png',
+    file        = 'sprites/player/idle.png',
     frameWidth  = 96,
     frameHeight = 96,
     totalFrames = 10,
-    interval    = 0.18,
+    interval    = 0.15,
     loop        = true
   },
   run = {
-    file        = 'sprites/SAMURAI/RUN.png',
+    file        = 'sprites/player/run.png',
     frameWidth  = 96,
     frameHeight = 96,
     totalFrames = 16,
-    interval    = 0.05,
-    loop        = true
+    interval    = 0.04,
+    loop        = true,
   },
   dash = {
-    file        = 'sprites/SAMURAI/DASH.png',
+    file        = 'sprites/player/dash.png',
     frameWidth  = 96,
     frameHeight = 96,
     totalFrames = 8,
-    interval    = 0.04,
+    interval    = 0.07,
     loop        = false
   },
   sprint = {
-    file        = 'sprites/SAMURAI/RUN.png',
+    file        = 'sprites/player/run.png',
     frameWidth  = 96,
     frameHeight = 96,
     totalFrames = 16,
@@ -53,7 +52,7 @@ local ANIMS           = {
     loop        = true
   },
   jump_start = {
-    file        = 'sprites/SAMURAI/JUMP-START.png',
+    file        = 'sprites/player/jump-start.png',
     frameWidth  = 96,
     frameHeight = 96,
     totalFrames = 3,
@@ -61,7 +60,7 @@ local ANIMS           = {
     loop        = false
   },
   jump = {
-    file        = 'sprites/SAMURAI/JUMP.png',
+    file        = 'sprites/player/jump.png',
     frameWidth  = 96,
     frameHeight = 96,
     totalFrames = 3,
@@ -69,7 +68,7 @@ local ANIMS           = {
     loop        = false
   },
   jump_transition = {
-    file        = 'sprites/SAMURAI/JUMP-TRANSITION.png',
+    file        = 'sprites/player/jump-tran.png',
     frameWidth  = 96,
     frameHeight = 96,
     totalFrames = 3,
@@ -77,7 +76,7 @@ local ANIMS           = {
     loop        = false
   },
   jump_fall = {
-    file        = 'sprites/SAMURAI/JUMP-FALL.png',
+    file        = 'sprites/player/jump-fall.png',
     frameWidth  = 96,
     frameHeight = 96,
     totalFrames = 3,
@@ -85,54 +84,58 @@ local ANIMS           = {
     loop        = false
   },
   air_attack = {
-    file = 'sprites/SAMURAI/AIR-ATTACK.png',
+    file = 'sprites/player/air-attack.png',
     frameWidth = 96,
     frameHeight = 96,
-    totalFrames = 6,
+    totalFrames = 5,
     interval = 0.07,
     loop = false
   },
   attack1 = {
-    file        = 'sprites/SAMURAI/ATTACK-1.png',
+    file        = 'sprites/player/attack-1.png',
     frameWidth  = 96,
     frameHeight = 96,
-    sheetOffset = 0,
     totalFrames = 7,
-    interval    = 0.05,
+    interval    = 0.06,
     loop        = false
   },
   attack2 = {
-    file        = 'sprites/SAMURAI/ATTACK-2.png',
+    file        = 'sprites/player/attack-2.png',
     frameWidth  = 96,
     frameHeight = 96,
-    sheetOffset = 0,
-    totalFrames = 7,
-    interval    = 0.05,
+    totalFrames = 6,
+    interval    = 0.06,
     loop        = false
   },
   attack3 = {
-    file        = 'sprites/SAMURAI/ATTACK-3.png',
+    file        = 'sprites/player/attack-3.png',
     frameWidth  = 96,
     frameHeight = 96,
-    sheetOffset = 0,
-    totalFrames = 7,
-    interval    = 0.07,
+    totalFrames = 6,
+    interval    = 0.06,
     loop        = false
   },
+  special_attack = {
+    file        = 'sprites/player/special-attack.png',
+    frameWidth  = 96,
+    frameHeight = 96,
+    totalFrames = 14,
+    interval    = 0.12,
+    loop        = false
+  }
 }
 
-local SPRITE_OFFSET_X = -105
-local SPRITE_OFFSET_Y = -120
+local SPRITE_OFFSET_X = -130
+local SPRITE_OFFSET_Y = -150
 
 function Player.new(x, y)
-  local self = Entity.new(x, y, 40, 80, ANIMS)
+  local self = Entity.new(x, y, 36, 86, ANIMS)
   setmetatable(self, Player)
 
   -- Jump --
   self.jumpHeld        = false
-  self.jumpTimer       = 0
-  self.coyoteTimer     = COYOTE_TIME
   self.jumpBufferTimer = 0
+  self.coyoteTimer     = COYOTE_TIME
 
   -- Attack --
   self.isLocked        = false
@@ -208,16 +211,6 @@ function Player:update(dt, world, effects)
         local cy = self.y + self.height / 2
         effects:addDashReady(cx, cy)
       end
-    end
-  end
-
-  -- Variable jump extension --
-  if self.jumpHeld then
-    if love.keyboard.isDown('space') and self.jumpTimer < MAX_JUMP_TIME then
-      self.vy        = self.vy + JUMP_HOLD_FORCE * dt
-      self.jumpTimer = self.jumpTimer + dt
-    else
-      self.jumpHeld = false
     end
   end
 
@@ -318,11 +311,17 @@ function Player:pressJump()
   self:jump()
 end
 
+function Player:releaseJump()
+  if self.vy < 0 then
+    self.vy = self.vy * JUMP_CUT
+  end
+  self.jumpHeld = false
+end
+
 function Player:jump()
   if self.coyoteTimer > 0 then
     self.vy             = JUMP_FORCE
     self.jumpHeld       = true
-    self.jumpTimer      = 0
     self.coyoteTimer    = 0
     self.isLocked       = false
     self.attackChain    = 0
@@ -356,6 +355,11 @@ end
 function Player:draw()
   love.graphics.setColor(1, 1, 1, self.dashAlpha)
   Entity.draw(self, SPRITE_OFFSET_X, SPRITE_OFFSET_Y, SCALE_X, SCALE_Y)
+  love.graphics.setColor(1, 1, 1, 1)
+
+  -- debug collision box
+  love.graphics.setColor(1, 0, 0, 0.5)
+  love.graphics.rectangle('line', self.x, self.y, self.width, self.height)
   love.graphics.setColor(1, 1, 1, 1)
 end
 

@@ -24,11 +24,6 @@ function love.draw()
   effects:draw()
   camera:detach()
   Debug.draw()
-  love.graphics.print('P: debug', 5, 100)
-  love.graphics.print('WASD: move', 5, 118)
-  love.graphics.print('J: dash/sprint', 5, 136)
-  love.graphics.print('K: attack', 5, 154)
-  love.graphics.print('SPACE: jump', 5, 172)
 end
 
 function love.keypressed(key)
@@ -56,7 +51,7 @@ end
 
 function love.keyreleased(key)
   if key == 'space' then
-    player.jumpHeld = false
+    player:releaseJump()
   end
 
   if key == 'j' then

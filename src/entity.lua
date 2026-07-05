@@ -1,3 +1,5 @@
+local Debug    = require('src.debug')
+
 local Entity   = {}
 Entity.__index = Entity
 
@@ -36,8 +38,8 @@ function Entity.new(x, y, width, height, anims)
     local offset      = def.sheetOffset or 0
     for i = 0, def.totalFrames - 1 do
       self.quads[name][i + 1] = love.graphics.newQuad(
-        (offset + i) * def.frameWidth,
-        0,
+        def.vertical and 0 or (offset + i) * def.frameWidth,  -- x
+        def.vertical and (offset + i) * def.frameHeight or 0, -- y
         def.frameWidth,
         def.frameHeight,
         self.sheets[name]:getDimensions()
