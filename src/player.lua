@@ -24,7 +24,7 @@ local ANIMS           = {
     frameWidth  = 96,
     frameHeight = 96,
     totalFrames = 10,
-    interval    = 0.15,
+    interval    = 0.2,
     loop        = true
   },
   run = {
@@ -358,9 +358,9 @@ function Player:draw()
   love.graphics.setColor(1, 1, 1, 1)
 
   -- debug collision box
-  love.graphics.setColor(1, 0, 0, 0.5)
-  love.graphics.rectangle('line', self.x, self.y, self.width, self.height)
-  love.graphics.setColor(1, 1, 1, 1)
+  -- love.graphics.setColor(1, 0, 0, 0.5)
+  -- love.graphics.rectangle('line', self.x, self.y, self.width, self.height)
+  -- love.graphics.setColor(1, 1, 1, 1)
 end
 
 return Player
