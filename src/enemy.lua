@@ -22,6 +22,14 @@ local ANIMS           = {
     interval    = 0.3,
     loop        = true
   },
+  walk = {
+    file        = 'sprites/skeleton-sword/walk.png',
+    frameWidth  = 128,
+    frameHeight = 128,
+    totalFrames = 7,
+    interval    = 0.18,
+    loop        = true
+  },
 }
 
 local SPRITE_OFFSET_X = -96
@@ -31,18 +39,40 @@ function Enemy.new(x, y)
   local self = Entity.new(x, y, 48, 110, ANIMS)
   setmetatable(self, Enemy)
 
-  self.health    = HEALTH
-  self.isDead    = false
-  self.patrolDir = 1 -- 1 = right, -1 = left
-  self.aiState   = 'patrol'
+  self.health       = HEALTH
+  self.isDead       = false
+  self.aiState      = 'patrol'
+  self.patrolDir    = 1
+  self.patrolOrigin = x
+  self.patrolDist   = 150
 
   self:setState('idle')
   return self
 end
 
 function Enemy:update(dt, world, player)
+  -- AI --
+  if self.aiState == 'patrol' then
+    self.x = self.x + WALK_SPEED * self.patrolDir * dt
+    self.isFacingRight = self.patrolDir == 1
+
+    -- turn around at patrol boundaries --
+    if self.x > self.patrolOrigin + self.patrolDist then
+      self.patrolDir = -1
+    elseif self.x < self.patrolOrigin - self.patrolDist then
+      self.patrolDir = 1
+    end
+  end
+
   self:updatePhysics(dt, world)
   self:updateAnimation(dt)
+
+  -- state machine --
+  if self.aiState == 'patrol' then
+    self:setState('walk')
+  else
+    self:setState('idle')
+  end
 
   -- Debug --
   Debug.log('enemy_state', self.aiState)
@@ -53,9 +83,9 @@ function Enemy:draw()
   Entity.draw(self, SPRITE_OFFSET_X, SPRITE_OFFSET_Y, SCALE_X, SCALE_Y)
 
   -- debug collision box
-  love.graphics.setColor(0, 1, 0, 0.5)
-  love.graphics.rectangle('line', self.x, self.y, self.width, self.height)
-  love.graphics.setColor(1, 1, 1, 1)
+  -- love.graphics.setColor(0, 1, 0, 0.5)
+  -- love.graphics.rectangle('line', self.x, self.y, self.width, self.height)
+  -- love.graphics.setColor(1, 1, 1, 1)
 end
 
 return Enemy

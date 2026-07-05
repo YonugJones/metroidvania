@@ -23,8 +23,9 @@ end
 function love.draw()
   world:draw(camera)
   camera:attach()
-  player:draw()
+
   enemy:draw()
+  player:draw()
   effects:draw()
   camera:detach()
   Debug.draw()
