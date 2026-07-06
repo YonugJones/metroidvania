@@ -5,13 +5,14 @@ local Enemy   = {}
 Enemy.__index = Enemy
 setmetatable(Enemy, { __index = Entity })
 
-local SCALE_X      = 2
-local SCALE_Y      = 2
-local WALK_SPEED   = 80
-local CHASE_SPEED  = 160
-local AGGRO_RANGE  = 400
-local ATTACK_RANGE = 60
-local HEALTH       = 3
+local SCALE_X          = 2
+local SCALE_Y          = 2
+local WALK_SPEED       = 80
+local CHASE_SPEED      = 200
+local AGGRO_RANGE      = 400
+local ATTACK_RANGE     = 60
+local HEALTH           = 3
+local ATTACK_END_DELAY = 0.5 -- pause after full combo before attacking again
 
 local function distanceTo(a, b)
   return math.abs(a.x - b.x)
@@ -34,6 +35,38 @@ local ANIMS           = {
     interval    = 0.18,
     loop        = true
   },
+  run = {
+    file        = 'sprites/skeleton-sword/run.png',
+    frameWidth  = 128,
+    frameHeight = 128,
+    totalFrames = 8,
+    interval    = 0.12,
+    loop        = true
+  },
+  attack_1 = {
+    file        = 'sprites/skeleton-sword/attack-1.png',
+    frameWidth  = 128,
+    frameHeight = 128,
+    totalFrames = 5,
+    interval    = 0.1,
+    loop        = false
+  },
+  attack_2 = {
+    file        = 'sprites/skeleton-sword/attack-2.png',
+    frameWidth  = 128,
+    frameHeight = 128,
+    totalFrames = 6,
+    interval    = 0.1,
+    loop        = false
+  },
+  attack_3 = {
+    file        = 'sprites/skeleton-sword/attack-3.png',
+    frameWidth  = 128,
+    frameHeight = 128,
+    totalFrames = 4,
+    interval    = 0.1,
+    loop        = false
+  },
 }
 
 local SPRITE_OFFSET_X = -96
@@ -49,6 +82,9 @@ function Enemy.new(x, y)
   self.patrolDir    = 1
   self.patrolOrigin = x
   self.patrolDist   = 150
+  self.attackTimer  = 0 -- cooldown between attacks --
+  self.attackChain  = 0 -- which attack in sequence --
+  self.isAttacking  = false
 
   self:setState('idle')
   return self
@@ -57,9 +93,20 @@ end
 function Enemy:update(dt, world, player)
   local dist = distanceTo(self, player)
 
+  -- tick attack cooldown --
+  if self.attackTimer > 0 then
+    self.attackTimer = self.attackTimer - dt
+  end
+
   -- AI State transitions --
-  if dist <= ATTACK_RANGE then
+  if self.isAttacking then
+    local dir = player.x > self.x and 1 or -1
+    self.isFacingRight = dir == 1
+  elseif dist <= ATTACK_RANGE and self.attackTimer <= 0 then
     self.aiState = 'attack'
+    self.isAttacking = true
+    self.attackChain = 1
+    self:setState('attack_1')
   elseif dist <= AGGRO_RANGE then
     self.aiState = 'chase'
   else
@@ -80,18 +127,17 @@ function Enemy:update(dt, world, player)
     local dir = player.x > self.x and 1 or -1
     self.x = self.x + CHASE_SPEED * dir * dt
     self.isFacingRight = dir == 1
-  elseif self.aiState == 'attack' then
-    -- attack logic here
   end
 
   self:updatePhysics(dt, world)
   self:updateAnimation(dt)
 
   -- state machine --
-  if self.aiState == 'patrol' then
+  if self.isAttacking then
+  elseif self.aiState == 'patrol' then
     self:setState('walk')
   elseif self.aiState == 'chase' then
-    self:setState('walk') -- run next
+    self:setState('run')
   else
     self:setState('idle')
   end
@@ -99,6 +145,21 @@ function Enemy:update(dt, world, player)
   -- Debug --
   Debug.log('enemy_state', self.aiState)
   Debug.log('enemy_health', self.health)
+end
+
+function Enemy:onAnimationEnd()
+  if self.state == 'attack_1' then
+    self.attackChain = 2
+    self:setState('attack_2')
+  elseif self.state == 'attack_2' then
+    self.attackChain = 3
+    self:setState('attack_3')
+  elseif self.state == 'attack_3' then
+    self.isAttacking = false
+    self.attackChain = 0
+    self.attackTimer = ATTACK_END_DELAY
+    self:setState('idle')
+  end
 end
 
 function Enemy:draw()
