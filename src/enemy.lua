@@ -10,12 +10,14 @@ local SCALE_Y          = 2
 local WALK_SPEED       = 80
 local CHASE_SPEED      = 200
 local AGGRO_RANGE      = 400
-local ATTACK_RANGE     = 60
+local ATTACK_RANGE     = 95
 local HEALTH           = 3
 local ATTACK_END_DELAY = 0.5 -- pause after full combo before attacking again
 
 local function distanceTo(a, b)
-  return math.abs(a.x - b.x)
+  local ax = a.x + a.width / 2
+  local bx = b.x + b.width / 2
+  return math.abs(ax - bx)
 end
 
 local ANIMS           = {
@@ -124,9 +126,11 @@ function Enemy:update(dt, world, player)
       self.patrolDir = 1
     end
   elseif self.aiState == 'chase' then
-    local dir = player.x > self.x and 1 or -1
-    self.x = self.x + CHASE_SPEED * dir * dt
-    self.isFacingRight = dir == 1
+    if dist > ATTACK_RANGE then
+      local dir = player.x > self.x and 1 or -1
+      self.x = self.x + CHASE_SPEED * dir * dt
+      self.isFacingRight = dir == 1
+    end
   end
 
   self:updatePhysics(dt, world)
@@ -134,6 +138,9 @@ function Enemy:update(dt, world, player)
 
   -- state machine --
   if self.isAttacking then
+    -- do nothing
+  elseif self.aiState == 'chase' and dist <= ATTACK_RANGE then
+    self:setState('idle') -- in range but waiting for cooldown
   elseif self.aiState == 'patrol' then
     self:setState('walk')
   elseif self.aiState == 'chase' then
@@ -158,6 +165,7 @@ function Enemy:onAnimationEnd()
     self.isAttacking = false
     self.attackChain = 0
     self.attackTimer = ATTACK_END_DELAY
+    self.aiState = 'idle'
     self:setState('idle')
   end
 end
