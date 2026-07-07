@@ -5,20 +5,23 @@ local Player   = {}
 Player.__index = Player
 setmetatable(Player, { __index = Entity }) -- Player falls back to Entity
 
-local SCALE_X         = 3
-local SCALE_Y         = 3
-local MOVE_SPEED      = 350
-local SPRINT_SPEED    = 600
-local DASH_SPEED      = 1200
-local DASH_DURATION   = 0.2
-local DASH_COOLDOWN   = 0.5
-local JUMP_FORCE      = -900 -- jump height
-local JUMP_CUT        = 0.4
-local COYOTE_TIME     = 0.1  -- seconds you can still jump after walking off a ledge
-local JUMP_BUFFER     = 0.1  -- seconds before landing that a jump input is remembered
-local ATTACK_STATES   = { 'attack1', 'attack2', 'attack3' }
+local SCALE_X            = 3
+local SCALE_Y            = 3
+local MOVE_SPEED         = 350
+local SPRINT_SPEED       = 600
+local DASH_SPEED         = 1200
+local DASH_DURATION      = 0.2
+local DASH_COOLDOWN      = 0.5
+local JUMP_FORCE         = -900 -- jump height
+local JUMP_CUT           = 0.4
+local COYOTE_TIME        = 0.1  -- seconds you can still jump after walking off a ledge
+local JUMP_BUFFER        = 0.1  -- seconds before landing that a jump input is remembered
+local ATTACK_STATES      = { 'attack_1', 'attack_2', 'attack_3' }
+local PLAYER_HEALTH      = 10
+local INVINCIBILITY_TIME = 1.0
+local HITBOX_WIDTH       = 80
 
-local ANIMS           = {
+local ANIMS              = {
   idle = {
     file        = 'sprites/player/idle.png',
     frameWidth  = 96,
@@ -87,31 +90,35 @@ local ANIMS           = {
     file = 'sprites/player/air-attack.png',
     frameWidth = 96,
     frameHeight = 96,
-    totalFrames = 5,
+    totalFrames = 6,
+    activeFrame = 3,
     interval = 0.07,
     loop = false
   },
-  attack1 = {
+  attack_1 = {
     file        = 'sprites/player/attack-1.png',
     frameWidth  = 96,
     frameHeight = 96,
     totalFrames = 7,
+    activeFrame = 5,
     interval    = 0.06,
     loop        = false
   },
-  attack2 = {
+  attack_2 = {
     file        = 'sprites/player/attack-2.png',
     frameWidth  = 96,
     frameHeight = 96,
     totalFrames = 6,
+    activeFrame = 4,
     interval    = 0.06,
     loop        = false
   },
-  attack3 = {
+  attack_3 = {
     file        = 'sprites/player/attack-3.png',
     frameWidth  = 96,
     frameHeight = 96,
     totalFrames = 6,
+    activeFrame = 3,
     interval    = 0.06,
     loop        = false
   },
@@ -122,11 +129,19 @@ local ANIMS           = {
     totalFrames = 14,
     interval    = 0.12,
     loop        = false
+  },
+  hurt = {
+    file        = 'sprites/player/hurt.png',
+    frameWidth  = 96,
+    frameHeight = 96,
+    totalFrames = 4,
+    interval    = 0.05,
+    loop        = false
   }
 }
 
-local SPRITE_OFFSET_X = -130
-local SPRITE_OFFSET_Y = -150
+local SPRITE_OFFSET_X    = -130
+local SPRITE_OFFSET_Y    = -150
 
 function Player.new(x, y)
   local self = Entity.new(x, y, 36, 86, ANIMS)
@@ -149,6 +164,12 @@ function Player.new(x, y)
   self.dashAlpha       = 1
   self.dashHeld        = false
   self.isSprinting     = false
+
+  -- Health --
+  self.health          = PLAYER_HEALTH
+  self.isInvincible    = false
+  self.invincibleTimer = 0
+  self.isHurt          = false
 
   self:setState('idle')
   return self
@@ -214,6 +235,15 @@ function Player:update(dt, world, effects)
     end
   end
 
+  -- Invincibility frames --
+  if self.isInvincible then
+    self.invincibleTimer = self.invincibleTimer - dt
+    if self.invincibleTimer <= 0 then
+      self.isInvincible    = false
+      self.invincibleTimer = 0
+    end
+  end
+
   -- Physics + Collision via Entity --
   self:updatePhysics(dt, world)
 
@@ -241,7 +271,9 @@ function Player:update(dt, world, effects)
   -- State machine --
   if self.isDashing then
     self:setState('dash')
-  elseif self.isGrounded and self.state == 'air_attack' then
+  elseif self.isHurt then
+    self:setState('hurt')
+  elseif self.isGrounded and self.state == 'air_attack' then -- land after air attack mid swing
     self.isLocked    = false
     self.attackChain = 0
     self:setState('idle')
@@ -277,7 +309,7 @@ function Player:onAnimationEnd()
     self:setState('jump_fall')
   elseif self.state == 'dash' then
     -- no action needed
-  elseif self.state == 'attack1' or self.state == 'attack2' then
+  elseif self.state == 'attack_1' or self.state == 'attack_2' then
     if self.attackBuffered then
       self.attackBuffered = false
       self.attackChain    = self.attackChain + 1
@@ -294,7 +326,7 @@ function Player:onAnimationEnd()
       self.attackChain = 0
       self:setState('idle')
     end
-  elseif self.state == 'attack3' then
+  elseif self.state == 'attack_3' then
     self.isLocked       = false
     self.attackChain    = 0
     self.attackBuffered = false
@@ -303,6 +335,10 @@ function Player:onAnimationEnd()
     self.isLocked    = false
     self.attackChain = 0
     self:setState('jump_fall')
+  elseif self.state == 'hurt' then
+    self.isHurt   = false
+    self.isLocked = false
+    self:setState('idle')
   end
 end
 
@@ -338,7 +374,7 @@ function Player:attack()
   elseif self.isGrounded and not self.isLocked then
     self.isLocked    = true
     self.attackChain = 1
-    self:setState('attack1')
+    self:setState('attack_1')
   elseif self.isGrounded and self.isLocked and self.attackChain < 3 and not self.attackBuffered then
     self.attackBuffered = true
   end
@@ -350,6 +386,51 @@ function Player:dash()
     self.dashTimer = DASH_DURATION
     self:setState('dash')
   end
+end
+
+function Player:getHitbox()
+  local attackStates = {
+    attack_1   = true,
+    attack_2   = true,
+    attack_3   = true,
+    air_attack = true
+  }
+  if not attackStates[self.state] then return nil end
+
+  local def = ANIMS[self.state]
+  if def.activeFrame and self.currentFrame < def.activeFrame then
+    return nil
+  end
+
+  local hx = self.isFacingRight
+      and self.x + self.width
+      or self.x - HITBOX_WIDTH
+
+  return {
+    x      = hx,
+    y      = self.y + 10,
+    width  = HITBOX_WIDTH,
+    height = self.height - 20
+  }
+end
+
+function Player:takeDamage(amount)
+  if self.isInvincible or self.isHurt then
+    return
+  end
+
+  self.health          = self.health - amount
+  self.isHurt          = true
+  self.isInvincible    = true
+  self.invincibleTimer = INVINCIBILITY_TIME
+  self.isLocked        = true
+
+  if self.health <= 0 then
+    self.health = 0
+    Debug.log('player_health', 'DEAD')
+  end
+
+  self:setState('hurt')
 end
 
 function Player:draw()
