@@ -83,6 +83,10 @@ function love.keypressed(key)
     player:attack()
   end
 
+  if key == 'l' then
+    player:specialAttack()
+  end
+
   if key == 'p' then
     Debug.toggle()
   end

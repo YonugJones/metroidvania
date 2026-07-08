@@ -61,10 +61,13 @@ end
 function Entity:updatePhysics(dt, world)
   -- Apply gravity --
   self.vy = self.vy + GRAVITY * dt
+
   -- Apply vertical velocity --
   self.y = self.y + self.vy * dt
+
   -- Reset grounded state --
   self.isGrounded = false
+
   -- Tile collision --
   local tiles = world:getTiles()
   for _, tile in ipairs(tiles) do

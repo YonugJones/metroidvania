@@ -5,23 +5,25 @@ local Player   = {}
 Player.__index = Player
 setmetatable(Player, { __index = Entity }) -- Player falls back to Entity
 
-local SCALE_X            = 3
-local SCALE_Y            = 3
-local MOVE_SPEED         = 350
-local SPRINT_SPEED       = 600
-local DASH_SPEED         = 1200
-local DASH_DURATION      = 0.2
-local DASH_COOLDOWN      = 0.5
-local JUMP_FORCE         = -900 -- jump height
-local JUMP_CUT           = 0.4
-local COYOTE_TIME        = 0.1  -- seconds you can still jump after walking off a ledge
-local JUMP_BUFFER        = 0.1  -- seconds before landing that a jump input is remembered
-local ATTACK_STATES      = { 'attack_1', 'attack_2', 'attack_3' }
-local PLAYER_HEALTH      = 10
-local INVINCIBILITY_TIME = 1.0
-local HITBOX_WIDTH       = 80
+local SCALE_X                 = 3
+local SCALE_Y                 = 3
+local MOVE_SPEED              = 350
+local SPRINT_SPEED            = 600
+local DASH_SPEED              = 1200
+local DASH_DURATION           = 0.2
+local DASH_COOLDOWN           = 0.5
+local JUMP_FORCE              = -900 -- jump height
+local JUMP_CUT                = 0.4
+local COYOTE_TIME             = 0.1  -- seconds you can still jump after walking off a ledge
+local JUMP_BUFFER             = 0.1  -- seconds before landing that a jump input is remembered
+local ATTACK_STATES           = { 'attack_1', 'attack_2', 'attack_3' }
+local PLAYER_HEALTH           = 10
+local INVINCIBILITY_TIME      = 1.0
+local HITBOX_WIDTH            = 100
+local SPECIAL_ATTACK_FORCE    = -600
+local SPECIAL_ATTACK_COOLDOWN = 5.0
 
-local ANIMS              = {
+local ANIMS                   = {
   idle = {
     file        = 'sprites/player/idle.png',
     frameWidth  = 96,
@@ -130,7 +132,8 @@ local ANIMS              = {
     frameWidth  = 96,
     frameHeight = 96,
     totalFrames = 14,
-    interval    = 0.12,
+    activeFrame = 6,
+    interval    = 0.08,
     loop        = false
   },
   hurt = {
@@ -143,36 +146,39 @@ local ANIMS              = {
   }
 }
 
-local SPRITE_OFFSET_X    = -130
-local SPRITE_OFFSET_Y    = -150
+local SPRITE_OFFSET_X         = -130
+local SPRITE_OFFSET_Y         = -150
 
 function Player.new(x, y)
   local self = Entity.new(x, y, 36, 86, ANIMS)
   setmetatable(self, Player)
 
   -- Jump --
-  self.jumpHeld        = false
-  self.jumpBufferTimer = 0
-  self.coyoteTimer     = COYOTE_TIME
+  self.jumpHeld           = false
+  self.jumpBufferTimer    = 0
+  self.coyoteTimer        = COYOTE_TIME
+  self.noGravity          = false
 
   -- Attack --
-  self.isLocked        = false
-  self.attackChain     = 0
-  self.attackBuffered  = false
+  self.isLocked           = false
+  self.attackChain        = 0
+  self.attackBuffered     = false
+  self.isSpecialAttacking = false
+  self.specialCooldown    = 0
 
   -- Dash --
-  self.isDashing       = false
-  self.dashTimer       = 0
-  self.dashCooldown    = 0
-  self.dashAlpha       = 1
-  self.dashHeld        = false
-  self.isSprinting     = false
+  self.isDashing          = false
+  self.dashTimer          = 0
+  self.dashCooldown       = 0
+  self.dashAlpha          = 1
+  self.dashHeld           = false
+  self.isSprinting        = false
 
   -- Health --
-  self.health          = PLAYER_HEALTH
-  self.isInvincible    = false
-  self.invincibleTimer = 0
-  self.isHurt          = false
+  self.health             = PLAYER_HEALTH
+  self.isInvincible       = false
+  self.invincibleTimer    = 0
+  self.isHurt             = false
 
   self:setState('idle')
   return self
@@ -238,6 +244,14 @@ function Player:update(dt, world, effects)
     end
   end
 
+  -- Special attack cooldown --
+  if self.specialCooldown > 0 then
+    self.specialCooldown = self.specialCooldown - dt
+    if self.specialCooldown <= 0 then
+      self.specialCooldown = 0
+    end
+  end
+
   -- Invincibility frames --
   if self.isInvincible then
     self.invincibleTimer = self.invincibleTimer - dt
@@ -276,6 +290,8 @@ function Player:update(dt, world, effects)
     self:setState('dash')
   elseif self.isHurt then
     self:setState('hurt')
+  elseif self.isSpecialAttacking then
+    self:setState('special_attack')
   elseif self.isGrounded and self.state == 'air_attack' then -- land after air attack mid swing
     self.isLocked    = false
     self.attackChain = 0
@@ -301,6 +317,8 @@ function Player:update(dt, world, effects)
 
   -- Debug --
   Debug.log('state', self.state)
+  Debug.log('special_cooldown', string.format("%.1f", self.specialCooldown))
+  Debug.log('vy', string.format("%.1f", self.vy))
 end
 
 function Player:onAnimationEnd()
@@ -337,6 +355,11 @@ function Player:onAnimationEnd()
   elseif self.state == 'air_attack' then
     self.isLocked    = false
     self.attackChain = 0
+    self:setState('jump_fall')
+  elseif self.state == 'special_attack' then
+    self.isSpecialAttacking = false
+    self.isLocked           = false
+    self.noGravity          = false
     self:setState('jump_fall')
   elseif self.state == 'hurt' then
     self.isHurt   = false
@@ -383,6 +406,19 @@ function Player:attack()
   end
 end
 
+function Player:specialAttack()
+  if self.specialCooldown > 0 then return end
+
+  self.isSpecialAttacking = true
+  self.specialCooldown    = SPECIAL_ATTACK_COOLDOWN
+  self.isLocked           = true
+  self.attackChain        = 0
+  self.attackBuffered     = false
+  self.vy                 = SPECIAL_ATTACK_FORCE
+  Debug.log('special_vy', self.vy) -- confirm force is being set
+  self:setState('special_attack')
+end
+
 function Player:dash()
   if not self.isDashing and self.dashCooldown <= 0 and not self.isLocked then
     self.isDashing = true
@@ -393,10 +429,11 @@ end
 
 function Player:getHitbox()
   local attackStates = {
-    attack_1   = true,
-    attack_2   = true,
-    attack_3   = true,
-    air_attack = true
+    attack_1       = true,
+    attack_2       = true,
+    attack_3       = true,
+    air_attack     = true,
+    special_attack = true
   }
   if not attackStates[self.state] then return nil end
 
@@ -442,9 +479,17 @@ function Player:draw()
   love.graphics.setColor(1, 1, 1, 1)
 
   -- debug collision box
-  -- love.graphics.setColor(1, 0, 0, 0.5)
-  -- love.graphics.rectangle('line', self.x, self.y, self.width, self.height)
-  -- love.graphics.setColor(1, 1, 1, 1)
+  love.graphics.setColor(1, 0, 0, 0.5)
+  love.graphics.rectangle('line', self.x, self.y, self.width, self.height)
+  love.graphics.setColor(1, 1, 1, 1)
+
+  -- debug special attack hitbox
+  local hitbox = self:getHitbox()
+  if hitbox then
+    love.graphics.setColor(1, 1, 0, 0.5)
+    love.graphics.rectangle('line', hitbox.x, hitbox.y, hitbox.width, hitbox.height)
+    love.graphics.setColor(1, 1, 1, 1)
+  end
 end
 
 return Player
