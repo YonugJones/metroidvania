@@ -1,12 +1,8 @@
-local Debug    = require('src.debug')
+local Entity  = Object:extend()
 
-local Entity   = {}
-Entity.__index = Entity
+local GRAVITY = 1800
 
-local GRAVITY  = 1800
-
-function Entity.new(x, y, width, height, anims)
-  local self         = setmetatable({}, Entity)
+function Entity:new(x, y, width, height, anims)
   -- Position --
   self.x             = x
   self.y             = y
@@ -16,38 +12,37 @@ function Entity.new(x, y, width, height, anims)
 
   -- Vertical --
   self.vy            = 0
-  self.isGrounded    = true
+  self.isGrounded    = false
 
   -- Animation --
+  self.anims         = anims
   self.sheets        = {}
   self.quads         = {}
   self.state         = nil
   self.currentFrame  = 1
   self.frameTimer    = 0
-  self.anims         = anims
+  self.frameInterval = nil
 
-  -- Load spritesheets and build quads
-  for name, def in pairs(anims) do
-    if not self.sheets[def.file] then
-      self.sheets[def.file] = love.graphics.newImage(def.file)
+  -- load spritesheets + build quads --
+  for key, value in pairs(anims) do
+    if not self.sheets[value.file] then
+      self.sheets[value.file] = love.graphics.newImage(value.file)
     end
 
-    self.sheets[name] = self.sheets[def.file]
-    self.quads[name]  = {}
+    self.sheets[key] = self.sheets[value.file]
+    self.quads[key]  = {}
 
-    local offset      = def.sheetOffset or 0
-    for i = 0, def.totalFrames - 1 do
-      self.quads[name][i + 1] = love.graphics.newQuad(
-        def.vertical and 0 or (offset + i) * def.frameWidth,  -- x
-        def.vertical and (offset + i) * def.frameHeight or 0, -- y
-        def.frameWidth,
-        def.frameHeight,
-        self.sheets[name]:getDimensions()
+    local offset     = value.sheetOffset or 0
+    for i = 0, value.totalFrames - 1 do
+      self.quads[key][i + 1] = love.graphics.newQuad(
+        (offset + i) * value.frameWidth, -- x
+        0,                               -- y
+        value.frameWidth,                -- width
+        value.frameHeight,               -- height
+        self.sheets[key]:getDimensions() -- spritesheet width + height
       )
     end
   end
-
-  return self
 end
 
 function Entity:setState(newState)
@@ -59,36 +54,36 @@ function Entity:setState(newState)
 end
 
 function Entity:updatePhysics(dt, world)
-  -- Apply gravity --
-  self.vy = self.vy + GRAVITY * dt
-
-  -- Apply vertical velocity --
-  self.y = self.y + self.vy * dt
-
-  -- Reset grounded state --
-  self.isGrounded = false
+  self.vy         = self.vy + GRAVITY * dt -- gravity is being applied to vertical velocity
+  self.y          = self.y + self.vy * dt  -- player y position is being affected by vertical velocity
+  self.isGrounded = false                  -- reset each phrame, collision sets to true if grounded
 
   -- Tile collision --
-  local tiles = world:getTiles()
-  for _, tile in ipairs(tiles) do
-    if self:overlaps(tile) then
-      self:resolveCollision(tile)
+  if world then
+    local tiles = world:getTiles()
+    for _, tile in ipairs(tiles) do
+      if self:detectCollision(tile) then
+        self:resolveCollision(tile)
+      end
     end
   end
 end
 
 function Entity:updateAnimation(dt)
-  local def = self.anims[self.state]
-  if not def then return end
-  local interval = self.frameInterval or def.interval
+  -- check if state has been set --
+  local value = self.anims[self.state]
+  if not value then return end
 
+  local interval = self.frameInterval or value.interval
   self.frameTimer = self.frameTimer + dt
-  if self.frameTimer >= def.interval then
+
+  -- at end of frame --
+  if self.frameTimer >= interval then
     self.frameTimer = self.frameTimer - interval
 
-    if def.loop then
-      self.currentFrame = (self.currentFrame % def.totalFrames) + 1
-    elseif self.currentFrame < def.totalFrames then
+    if value.loop then
+      self.currentFrame = (self.currentFrame % value.totalFrames) + 1
+    elseif self.currentFrame < value.totalFrames then
       self.currentFrame = self.currentFrame + 1
     else
       self:onAnimationEnd()
@@ -97,10 +92,10 @@ function Entity:updateAnimation(dt)
 end
 
 function Entity:onAnimationEnd()
-  -- override in subclass
+  -- override in subclass --
 end
 
-function Entity:overlaps(other)
+function Entity:detectCollision(other)
   return self.x < other.x + other.width
       and self.x + self.width > other.x
       and self.y < other.y + other.height
@@ -108,22 +103,27 @@ function Entity:overlaps(other)
 end
 
 function Entity:resolveCollision(tile)
-  local overlapLeft   = (self.x + self.width) - tile.x
-  local overlapRight  = (tile.x + tile.width) - self.x
-  local overlapTop    = (self.y + self.height) - tile.y
-  local overlapBottom = (tile.y + tile.height) - self.y
-  local minOverlap    = math.min(overlapLeft, overlapRight, overlapTop, overlapBottom)
+  local overlapTileLeft   = (self.x + self.width) - tile.x
+  local overlapTileRight  = (tile.x + tile.width) - self.x
+  local overlapTileTop    = (self.y + self.height) - tile.y
+  local overlapTileBottom = (tile.y + tile.height) - self.y
+  local minOverlap        = math.min(
+    overlapTileLeft,
+    overlapTileRight,
+    overlapTileTop,
+    overlapTileBottom
+  )
 
-  if minOverlap == overlapTop then -- Entity hits top of tile
+  if minOverlap == overlapTileTop then
     self.y          = tile.y - self.height
     self.vy         = 0
     self.isGrounded = true
-  elseif minOverlap == overlapBottom then -- Entity hits bottom of tile
+  elseif minOverlap == overlapTileBottom then
     self.y  = tile.y + tile.height
     self.vy = 0
-  elseif minOverlap == overlapLeft then  -- Entity hits left side of tile
+  elseif minOverlap == overlapTileLeft then
     self.x = tile.x - self.width
-  elseif minOverlap == overlapRight then -- Entity hits right side of tile
+  elseif minOverlap == overlapTileRight then
     self.x = tile.x + tile.width
   end
 end
@@ -139,13 +139,13 @@ function Entity:draw(spriteOffsetX, spriteOffsetY, scaleX, scaleY)
   local offsetX = self.isFacingRight and 0 or def.frameWidth * scaleX
 
   love.graphics.draw(
-    self.sheets[self.state],
-    self.quads[self.state][self.currentFrame],
-    self.x + offsetX + (spriteOffsetX or 0),
-    self.y + (spriteOffsetY or 0),
-    0,
-    flipX * scaleX,
-    scaleY
+    self.sheets[self.state],                   -- drawable
+    self.quads[self.state][self.currentFrame], -- quad
+    self.x + (spriteOffsetX or 0) + offsetX,   -- x
+    self.y + (spriteOffsetY or 0),             -- y
+    0,                                         -- r
+    flipX * scaleX,                            -- sx
+    scaleY                                     -- sy
   )
 end
 

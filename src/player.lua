@@ -1,95 +1,145 @@
-local Entity   = require('src.entity')
-local Debug    = require('src.debug')
+local Entity             = require 'src.entity'
+local Player             = Entity:extend()
+local Debug              = require 'src.debug'
 
-local Player   = {}
-Player.__index = Player
-setmetatable(Player, { __index = Entity }) -- Player falls back to Entity
+-- size --
+local WIDTH              = 36
+local HEIGHT             = 86
+local SPRITE_OFFSET_X    = -50 -- lower number moves sprite to the left
+local SPRITE_OFFSET_Y    = -31 -- lower number moves sprite up
+local SCALE_X            = 3
+local SCALE_Y            = 3
 
-local SCALE_X                 = 3
-local SCALE_Y                 = 3
-local MOVE_SPEED              = 350
-local SPRINT_SPEED            = 600
-local DASH_SPEED              = 1200
-local DASH_DURATION           = 0.2
-local DASH_COOLDOWN           = 0.5
-local JUMP_FORCE              = -900 -- jump height
-local JUMP_CUT                = 0.4
-local COYOTE_TIME             = 0.1  -- seconds you can still jump after walking off a ledge
-local JUMP_BUFFER             = 0.1  -- seconds before landing that a jump input is remembered
-local ATTACK_STATES           = { 'attack_1', 'attack_2', 'attack_3' }
-local PLAYER_HEALTH           = 10
-local INVINCIBILITY_TIME      = 1.0
-local HITBOX_WIDTH            = 100
-local SPECIAL_ATTACK_FORCE    = -600
-local SPECIAL_ATTACK_COOLDOWN = 5.0
+-- movement --
+local MOVE_SPEED         = 350
+local SPRINT_SPEED       = 600
+local DASH_DURATION      = 0.2
+local DASH_COOLDOWN      = 0.5
+local JUMP_FORCE         = -900 -- jump height
+local JUMP_CUT           = 0.4
+local COYOTE_TIME        = 0.1  -- seconds you can still jump after walking off a ledge
+local JUMP_BUFFER        = 0.1  -- seconds before landing that a jump input is remembered
 
-local ANIMS                   = {
+-- attack --
+local PLAYER_HEALTH      = 10
+local INVINCIBILITY_TIME = 1.0
+local HITBOX_WIDTH       = 100
+
+local ANIMS              = {
   idle = {
-    file        = 'sprites/player/idle.png',
-    frameWidth  = 96,
-    frameHeight = 96,
+    file        = 'sprites/proto-woman/idle.png',
+    frameWidth  = 48,
+    frameHeight = 48,
     totalFrames = 10,
     interval    = 0.2,
     loop        = true
   },
   run = {
-    file        = 'sprites/player/run.png',
-    frameWidth  = 96,
-    frameHeight = 96,
-    totalFrames = 16,
-    interval    = 0.04,
+    file        = 'sprites/proto-woman/run.png',
+    frameWidth  = 48,
+    frameHeight = 48,
+    totalFrames = 8,
+    interval    = 0.1,
     loop        = true,
   },
-  dash = {
-    file        = 'sprites/player/dash.png',
-    frameWidth  = 96,
-    frameHeight = 96,
-    totalFrames = 8,
-    interval    = 0.07,
-    loop        = false
-  },
   sprint = {
-    file        = 'sprites/player/run.png',
-    frameWidth  = 96,
-    frameHeight = 96,
-    totalFrames = 16,
-    interval    = 0.03,
+    file        = 'sprites/proto-woman/run.png',
+    frameWidth  = 48,
+    frameHeight = 48,
+    totalFrames = 8,
+    interval    = 0.08,
     loop        = true
   },
-  jump_start = {
-    file        = 'sprites/player/jump-start.png',
-    frameWidth  = 96,
-    frameHeight = 96,
-    totalFrames = 3,
+  dash = {
+    file        = 'sprites/proto-woman/dash.png',
+    frameWidth  = 48,
+    frameHeight = 48,
+    totalFrames = 9,
     interval    = 0.07,
     loop        = false
   },
-  jump = {
-    file        = 'sprites/player/jump.png',
-    frameWidth  = 96,
-    frameHeight = 96,
-    totalFrames = 3,
-    interval    = 0.07,
+  roll = {
+    file        = 'sprites/proto-woman/roll.png',
+    frameWidth  = 48,
+    frameHeight = 48,
+    totalFrames = 7,
+    interval    = 0.09,
     loop        = false
   },
-  jump_transition = {
-    file        = 'sprites/player/jump-tran.png',
-    frameWidth  = 96,
-    frameHeight = 96,
+  jump_up = {
+    file        = 'sprites/proto-woman/jump.png',
+    frameWidth  = 48,
+    frameHeight = 48,
+    sheetOffset = 0,
     totalFrames = 3,
-    interval    = 0.07,
+    interval    = 0.09,
     loop        = false
   },
   jump_fall = {
-    file        = 'sprites/player/jump-fall.png',
-    frameWidth  = 96,
-    frameHeight = 96,
+    file        = 'sprites/proto-woman/jump.png',
+    frameWidth  = 48,
+    frameHeight = 48,
+    sheetOffset = 3,
     totalFrames = 3,
+    interval    = 0.09,
+    loop        = false
+  },
+  air_spin = {
+    file        = 'sprites/proto-woman/air-spin.png',
+    frameWidth  = 48,
+    frameHeight = 48,
+    totalFrames = 6,
     interval    = 0.07,
     loop        = false
   },
+  slide = {
+    file        = 'sprites/proto-woman/slide.png',
+    frameWidth  = 48,
+    frameHeight = 48,
+    totalFrames = 8,
+    interval    = 0.09,
+    loop        = false
+  },
+
+  -- need frameWidthOffset
+  attack_sheath = {
+    file        = 'sprites/proto-woman/attack-sheathe.png',
+    frameWidth  = 80,
+    frameHeight = 64,
+    totalFrames = 10,
+    interval    = 0.07,
+    loop        = true
+  },
+
+  attack_continuous = {
+    file        = 'sprites/proto-woman/attack-continuous.png',
+    frameWidth  = 80,
+    frameHeight = 64,
+    totalFrames = 9,
+    interval    = 0.06,
+    loop        = true
+  },
+
+  sword_stab = {
+    file        = 'sprites/proto-woman/sword-stab.png',
+    frameWidth  = 96,
+    frameHeight = 48,
+    totalFrames = 7,
+    interval    = 0.11,
+    loop        = false
+  },
+
+  sword_attack = {
+    file        = 'sprites/proto-woman/sword-attack.png',
+    frameWidth  = 64,
+    frameHeight = 64,
+    totalFrames = 6,
+    interval    = 0.1,
+    loop        = true
+  },
+
   air_attack = {
-    file = 'sprites/player/air-attack.png',
+    file = 'sprites/samurai-2/air-attack.png',
     frameWidth = 96,
     frameHeight = 96,
     totalFrames = 6,
@@ -98,7 +148,7 @@ local ANIMS                   = {
     loop = false
   },
   attack_1 = {
-    file        = 'sprites/player/attack-1.png',
+    file        = 'sprites/samurai-2/attack-1.png',
     frameWidth  = 96,
     frameHeight = 96,
     sheetOffset = 3,
@@ -108,7 +158,7 @@ local ANIMS                   = {
     loop        = false
   },
   attack_2 = {
-    file        = 'sprites/player/attack-2.png',
+    file        = 'sprites/samurai-2/attack-2.png',
     frameWidth  = 96,
     frameHeight = 96,
     sheetOffset = 2,
@@ -118,7 +168,7 @@ local ANIMS                   = {
     loop        = false
   },
   attack_3 = {
-    file        = 'sprites/player/attack-3.png',
+    file        = 'sprites/samurai-2/attack-3.png',
     frameWidth  = 96,
     frameHeight = 96,
     sheetOffset = 1,
@@ -127,17 +177,8 @@ local ANIMS                   = {
     interval    = 0.06,
     loop        = false
   },
-  special_attack = {
-    file        = 'sprites/player/special-attack.png',
-    frameWidth  = 96,
-    frameHeight = 96,
-    totalFrames = 14,
-    activeFrame = 6,
-    interval    = 0.08,
-    loop        = false
-  },
   hurt = {
-    file        = 'sprites/player/hurt.png',
+    file        = 'sprites/samurai-2/hurt.png',
     frameWidth  = 96,
     frameHeight = 96,
     totalFrames = 4,
@@ -146,64 +187,59 @@ local ANIMS                   = {
   }
 }
 
-local SPRITE_OFFSET_X         = -130
-local SPRITE_OFFSET_Y         = -150
+function Player:new(x, y)
+  Player.super.new(self, x, y, WIDTH, HEIGHT, ANIMS)
 
-function Player.new(x, y)
-  local self = Entity.new(x, y, 36, 86, ANIMS)
-  setmetatable(self, Player)
-
-  -- Jump --
-  self.jumpHeld           = false
-  self.jumpBufferTimer    = 0
-  self.coyoteTimer        = COYOTE_TIME
-  self.noGravity          = false
-
-  -- Attack --
-  self.isLocked           = false
-  self.attackChain        = 0
-  self.attackBuffered     = false
-  self.isSpecialAttacking = false
-  self.specialCooldown    = 0
+  -- movement --
+  self.state           = 'idle'
+  self.isLocked        = false
+  self.jumpBufferTimer = 0
+  self.coyoteTimer     = COYOTE_TIME
 
   -- Dash --
-  self.isDashing          = false
-  self.dashTimer          = 0
-  self.dashCooldown       = 0
-  self.dashAlpha          = 1
-  self.dashHeld           = false
-  self.isSprinting        = false
+  self.isDashing       = false
+  self.dashTimer       = 0
+  self.dashCooldown    = 0
+  self.dashAlpha       = 1
+  self.dashHeld        = false
+  self.isSprinting     = false
+
+  -- attack --
+  self.attackChain     = 0
+  self.attackBuffered  = false
 
   -- Health --
-  self.health             = PLAYER_HEALTH
-  self.isInvincible       = false
-  self.invincibleTimer    = 0
-  self.isHurt             = false
-
-  self:setState('idle')
-  return self
+  self.health          = PLAYER_HEALTH
+  self.isInvincible    = false
+  self.invincibleTimer = 0
+  self.isHurt          = false
 end
 
 function Player:update(dt, world, effects)
-  -- Horizontal movement --
+  -- horizontal movement --
+  local dir = self.isFacingRight and 1 or -1
+
   if love.keyboard.isDown('a') then
     self.isFacingRight = false
-    if not self.isLocked or self.state == 'air_attack' then
-      local speed = self.isSprinting and SPRINT_SPEED or MOVE_SPEED
-      self.x = self.x - speed * dt
-    end
   elseif love.keyboard.isDown('d') then
     self.isFacingRight = true
-    if not self.isLocked or self.state == 'air_attack' then
-      local speed = self.isSprinting and SPRINT_SPEED or MOVE_SPEED
-      self.x = self.x + speed * dt
+  end
+
+  if not self.isLocked or self.state == 'air_attack' or self.state == 'slide' or self.state == 'roll' then
+    if self.isSprinting then
+      self.x = self.x + SPRINT_SPEED * dir * dt
+    elseif self.state == 'roll' then
+      self.x = self.x + SPRINT_SPEED * dir * dt
+    elseif love.keyboard.isDown('a') then
+      self.x = self.x + MOVE_SPEED * dir * dt
+    elseif love.keyboard.isDown('d') then
+      self.x = self.x + MOVE_SPEED * dir * dt
     end
   end
 
   -- Dash --
   if self.isDashing then
-    local dir      = self.isFacingRight and 1 or -1
-    self.x         = self.x + DASH_SPEED * dir * dt
+    self.x         = self.x + SPRINT_SPEED * dir * dt
     self.vy        = 0 -- no gravity
 
     -- Fade out first half, fade in second half
@@ -226,9 +262,14 @@ function Player:update(dt, world, effects)
   end
 
   -- sprint check --
-  local isMoving = love.keyboard.isDown('a') or love.keyboard.isDown('d')
-  if self.isSprinting and (not self.dashHeld or not isMoving) then
+  if self.isSprinting and not self.dashHeld then
     self.isSprinting = false
+  end
+
+  -- cancel slide if sprint released --
+  if self.state == 'slide' and not self.dashHeld then
+    self.isLocked = false
+    self:setState('idle')
   end
 
   -- Dash cooldown --
@@ -244,14 +285,6 @@ function Player:update(dt, world, effects)
     end
   end
 
-  -- Special attack cooldown --
-  if self.specialCooldown > 0 then
-    self.specialCooldown = self.specialCooldown - dt
-    if self.specialCooldown <= 0 then
-      self.specialCooldown = 0
-    end
-  end
-
   -- Invincibility frames --
   if self.isInvincible then
     self.invincibleTimer = self.invincibleTimer - dt
@@ -264,7 +297,7 @@ function Player:update(dt, world, effects)
   -- Physics + Collision via Entity --
   self:updatePhysics(dt, world)
 
-  -- Coyote time --
+  -- coyoteTimer tick --
   if self.isGrounded then
     self.coyoteTimer = COYOTE_TIME
   else
@@ -290,8 +323,6 @@ function Player:update(dt, world, effects)
     self:setState('dash')
   elseif self.isHurt then
     self:setState('hurt')
-  elseif self.isSpecialAttacking then
-    self:setState('special_attack')
   elseif self.isGrounded and self.state == 'air_attack' then -- land after air attack mid swing
     self.isLocked    = false
     self.attackChain = 0
@@ -299,73 +330,40 @@ function Player:update(dt, world, effects)
   elseif self.isLocked then
     -- do nothing
   elseif not self.isGrounded and self.coyoteTimer <= 0 then
-    local inJumpChain = self.state == 'jump_start'
-        or self.state == 'jump'
-        or self.state == 'jump_transition'
-        or self.state == 'jump_fall'
-        or self.state == 'air_attack'
-    if not inJumpChain then
+    if self.state ~= 'jump_up'
+        and self.state ~= 'jump_fall'
+        and self.state ~= 'air_attack'
+        and self.state ~= 'air_spin' then
       self:setState('jump_fall')
     end
-  elseif self.isSprinting and self.dashHeld and isMoving then
+  elseif self.isSprinting and self.dashHeld then
     self:setState('sprint')
   elseif love.keyboard.isDown('a') or love.keyboard.isDown('d') then
     self:setState('run')
   else
     self:setState('idle')
   end
-
   -- Debug --
-  Debug.log('state', self.state)
-  Debug.log('special_cooldown', string.format("%.1f", self.specialCooldown))
-  Debug.log('vy', string.format("%.1f", self.vy))
+  -- Debug.log('state', self.state)
 end
 
-function Player:onAnimationEnd()
-  if self.state == 'jump_start' then
-    self:setState('jump')
-  elseif self.state == 'jump' then
-    self:setState('jump_transition')
-  elseif self.state == 'jump_transition' then
-    self:setState('jump_fall')
-  elseif self.state == 'dash' then
-    -- no action needed
-  elseif self.state == 'attack_1' or self.state == 'attack_2' then
-    if self.attackBuffered then
-      self.attackBuffered = false
-      self.attackChain    = self.attackChain + 1
-      local nextState     = ATTACK_STATES[self.attackChain]
-      if nextState then
-        self:setState(nextState)
-      else
-        self.isLocked    = false
-        self.attackChain = 0
-        self:setState('idle')
-      end
-    else
-      self.isLocked    = false
-      self.attackChain = 0
-      self:setState('idle')
-    end
-  elseif self.state == 'attack_3' then
-    self.isLocked       = false
-    self.attackChain    = 0
-    self.attackBuffered = false
-    self:setState('idle')
-  elseif self.state == 'air_attack' then
-    self.isLocked    = false
-    self.attackChain = 0
-    self:setState('jump_fall')
-  elseif self.state == 'special_attack' then
-    self.isSpecialAttacking = false
-    self.isLocked           = false
-    self.noGravity          = false
-    self:setState('jump_fall')
-  elseif self.state == 'hurt' then
-    self.isHurt   = false
-    self.isLocked = false
-    self:setState('idle')
-  end
+function Player:draw()
+  love.graphics.setColor(1, 1, 1, self.dashAlpha)
+  Entity.draw(self, SPRITE_OFFSET_X, SPRITE_OFFSET_Y, SCALE_X, SCALE_Y)
+  love.graphics.setColor(1, 1, 1, 1)
+
+  -- debug collision box
+  love.graphics.setColor(1, 0, 0, 0.5)
+  love.graphics.rectangle('line', self.x, self.y, self.width, self.height)
+  love.graphics.setColor(1, 1, 1, 1)
+
+  -- debug special attack hitbox
+  -- local hitbox = self:getHitbox()
+  -- if hitbox then
+  --   love.graphics.setColor(1, 1, 0, 0.5)
+  --   love.graphics.rectangle('line', hitbox.x, hitbox.y, hitbox.width, hitbox.height)
+  --   love.graphics.setColor(1, 1, 1, 1)
+  -- end
 end
 
 function Player:pressJump()
@@ -373,22 +371,46 @@ function Player:pressJump()
   self:jump()
 end
 
-function Player:releaseJump()
-  if self.vy < 0 then
-    self.vy = self.vy * JUMP_CUT
-  end
-  self.jumpHeld = false
-end
-
 function Player:jump()
   if self.coyoteTimer > 0 then
     self.vy             = JUMP_FORCE
-    self.jumpHeld       = true
     self.coyoteTimer    = 0
     self.isLocked       = false
     self.attackChain    = 0
     self.attackBuffered = false
-    self:setState('jump_start')
+    if self.isSprinting then
+      self:setState('air_spin')
+    else
+      self:setState('jump_up')
+    end
+  end
+end
+
+function Player:releaseJump()
+  if self.vy < 0 then
+    self.vy = self.vy * JUMP_CUT
+  end
+end
+
+function Player:dash()
+  if not self.isDashing and self.dashCooldown <= 0 and not self.isLocked then
+    self.isDashing = true
+    self.dashTimer = DASH_DURATION
+    self:setState('dash')
+  end
+end
+
+function Player:slide()
+  if not self.isGrounded or self.isLocked then
+    return
+  end
+
+  if self.isSprinting then
+    self.isLocked = true
+    self:setState('slide')
+  else
+    self.isLocked = true
+    self:setState('roll')
   end
 end
 
@@ -403,27 +425,6 @@ function Player:attack()
     self:setState('attack_1')
   elseif self.isGrounded and self.isLocked and self.attackChain < 3 and not self.attackBuffered then
     self.attackBuffered = true
-  end
-end
-
-function Player:specialAttack()
-  if self.specialCooldown > 0 then return end
-
-  self.isSpecialAttacking = true
-  self.specialCooldown    = SPECIAL_ATTACK_COOLDOWN
-  self.isLocked           = true
-  self.attackChain        = 0
-  self.attackBuffered     = false
-  self.vy                 = SPECIAL_ATTACK_FORCE
-  Debug.log('special_vy', self.vy) -- confirm force is being set
-  self:setState('special_attack')
-end
-
-function Player:dash()
-  if not self.isDashing and self.dashCooldown <= 0 and not self.isLocked then
-    self.isDashing = true
-    self.dashTimer = DASH_DURATION
-    self:setState('dash')
   end
 end
 
@@ -473,22 +474,48 @@ function Player:takeDamage(amount)
   self:setState('hurt')
 end
 
-function Player:draw()
-  love.graphics.setColor(1, 1, 1, self.dashAlpha)
-  Entity.draw(self, SPRITE_OFFSET_X, SPRITE_OFFSET_Y, SCALE_X, SCALE_Y)
-  love.graphics.setColor(1, 1, 1, 1)
-
-  -- debug collision box
-  love.graphics.setColor(1, 0, 0, 0.5)
-  love.graphics.rectangle('line', self.x, self.y, self.width, self.height)
-  love.graphics.setColor(1, 1, 1, 1)
-
-  -- debug special attack hitbox
-  local hitbox = self:getHitbox()
-  if hitbox then
-    love.graphics.setColor(1, 1, 0, 0.5)
-    love.graphics.rectangle('line', hitbox.x, hitbox.y, hitbox.width, hitbox.height)
-    love.graphics.setColor(1, 1, 1, 1)
+function Player:onAnimationEnd()
+  -- jump --
+  if self.state == 'jump_up' then
+    self:setState('jump_fall')
+  elseif self.state == 'air_spin' then
+    self:setState('jump_fall')
+    -- attack --
+  elseif self.state == 'slide' then
+    self.isLocked = false
+    if self.dashHeld then
+      self:setState('sprint')
+    else
+      self:setState('idle')
+    end
+  elseif self.state == 'roll' then
+    self.isLocked = false
+    self:setState('idle')
+  elseif self.state == 'attack_1' or self.state == 'attack_2' then
+    if self.attackBuffered then -- next attack is initiated
+      self.attackBuffered = false
+      self.attackChain    = self.attackChain + 1
+      if self.attackChain <= 3 then
+        self:setState('attack_' .. self.attackChain)
+      else
+        self.isLocked    = false
+        self.attackChain = 0
+        self:setState('idle')
+      end
+    else -- next attack is NOT initiated
+      self.isLocked    = false
+      self.attackChain = 0
+      self:setState('idle')
+    end
+  elseif self.state == 'attack_3' then
+    self.isLocked       = false
+    self.attackChain    = 0
+    self.attackBuffered = false
+    self:setState('idle')
+  elseif self.state == 'hurt' then
+    self.isHurt   = false
+    self.isLocked = false
+    self:setState('idle')
   end
 end
 

@@ -1,14 +1,15 @@
-local World = require('src.world')
-local Player = require('src.player')
-local Enemy = require('src.enemy')
-local Camera = require('src.camera')
-local Effects = require('src.effects')
-local Debug = require('src.debug')
+Object        = require 'lib.classic'
+local World   = require 'src.world'
+local Player  = require 'src.player'
+-- local Enemy   = require 'src.enemy'
+local Camera  = require 'src.camera'
+local Effects = require 'src.effects'
+local Debug   = require 'src.debug'
 
 function love.load()
   world = World.new()
-  player = Player.new(200, 200)
-  enemy = Enemy.new(500, 200)
+  player = Player(200, 200)
+  -- enemy = Enemy.new(500, 200)
   camera = Camera.new()
   effects = Effects.new()
 end
@@ -26,33 +27,33 @@ end
 
 function love.update(dt)
   player:update(dt, world, effects)
-  enemy:update(dt, world, player)
+  -- enemy:update(dt, world, player)
 
   -- Player hits enemy --
   local playerHitbox = player:getHitbox()
-  local enemyHurtbox = {
-    x      = enemy.x,
-    y      = enemy.y,
-    width  = enemy.width,
-    height = enemy.height
-  }
+  -- local enemyHurtbox = {
+  --   x      = enemy.x,
+  --   y      = enemy.y,
+  --   width  = enemy.width,
+  --   height = enemy.height
+  -- }
 
-  if checkHitboxOverlap(playerHitbox, enemyHurtbox) then
-    enemy:takeDamage(1)
-  end
+  -- if checkHitboxOverlap(playerHitbox, enemyHurtbox) then
+  --   enemy:takeDamage(1)
+  -- end
 
   -- Enemy hits player --
-  local enemyHitbox = enemy:getHitbox()
-  local playerHurtbox = {
-    x      = player.x,
-    y      = player.y,
-    width  = player.width,
-    height = player.height
-  }
+  -- local enemyHitbox = enemy:getHitbox()
+  -- local playerHurtbox = {
+  --   x      = player.x,
+  --   y      = player.y,
+  --   width  = player.width,
+  --   height = player.height
+  -- }
 
-  if checkHitboxOverlap(enemyHitbox, playerHurtbox) then
-    player:takeDamage(1)
-  end
+  -- if checkHitboxOverlap(enemyHitbox, playerHurtbox) then
+  --   player:takeDamage(1)
+  -- end
 
   camera:follow(player, love.graphics.getWidth(), love.graphics.getHeight())
   effects:update(dt)
@@ -62,7 +63,7 @@ function love.draw()
   world:draw(camera)
   camera:attach()
 
-  enemy:draw()
+  -- enemy:draw()
   player:draw()
   effects:draw()
   camera:detach()
@@ -83,8 +84,8 @@ function love.keypressed(key)
     player:attack()
   end
 
-  if key == 'l' then
-    player:specialAttack()
+  if key == 's' then
+    player:slide()
   end
 
   if key == 'p' then
