@@ -1,17 +1,17 @@
-Object        = require 'lib.classic'
-local World   = require 'src.world'
-local Player  = require 'src.player'
+Object       = require 'lib.classic'
+local World  = require 'src.world'
+local Player = require 'src.player'
 -- local Enemy   = require 'src.enemy'
-local Camera  = require 'src.camera'
-local Effects = require 'src.effects'
-local Debug   = require 'src.debug'
+local Camera = require 'src.camera'
+-- local Effects = require 'src.effects'
+local Debug  = require 'src.debug'
 
 function love.load()
   world = World.new()
   player = Player(200, 200)
   -- enemy = Enemy.new(500, 200)
   camera = Camera.new()
-  effects = Effects.new()
+  -- effects = Effects.new()
 end
 
 local function checkHitboxOverlap(a, b)
@@ -26,7 +26,7 @@ local function checkHitboxOverlap(a, b)
 end
 
 function love.update(dt)
-  player:update(dt, world, effects)
+  player:update(dt, world)
   -- enemy:update(dt, world, player)
 
   -- Player hits enemy --
@@ -56,7 +56,7 @@ function love.update(dt)
   -- end
 
   camera:follow(player, love.graphics.getWidth(), love.graphics.getHeight())
-  effects:update(dt)
+  -- effects:update(dt)
 end
 
 function love.draw()
@@ -65,7 +65,7 @@ function love.draw()
 
   -- enemy:draw()
   player:draw()
-  effects:draw()
+  -- effects:draw()
   camera:detach()
   Debug.draw()
 end
@@ -82,6 +82,14 @@ function love.keypressed(key)
 
   if key == 'k' then
     player:attack()
+  end
+
+  if key == 'u' then
+    player:toggleStance('katana')
+  end
+
+  if key == 'i' then
+    player:toggleStance('sword')
   end
 
   if key == 's' then

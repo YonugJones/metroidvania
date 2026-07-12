@@ -13,8 +13,7 @@ local SCALE_Y            = 3
 -- movement --
 local MOVE_SPEED         = 350
 local SPRINT_SPEED       = 600
-local DASH_DURATION      = 0.2
-local DASH_COOLDOWN      = 0.5
+local DASH_DURATION      = 0.3
 local JUMP_FORCE         = -900 -- jump height
 local JUMP_CUT           = 0.4
 local COYOTE_TIME        = 0.1  -- seconds you can still jump after walking off a ledge
@@ -34,8 +33,43 @@ local ANIMS              = {
     interval    = 0.2,
     loop        = true
   },
+  idle_katana = {
+    file        = 'sprites/proto-woman/attack-katana-sheathe.png',
+    frameWidth  = 80,
+    frameHeight = 64,
+    sheetOffset = 6,
+    totalFrames = 2,
+    interval    = 0.1,
+    loop        = false,
+    offsetX     = -45,
+    offsetY     = -23
+  },
+  idle_sword = {
+    file        = 'sprites/proto-woman/idle-sword.png',
+    frameWidth  = 48,
+    frameHeight = 48,
+    totalFrames = 10,
+    interval    = 0.2,
+    loop        = true
+  },
   run = {
     file        = 'sprites/proto-woman/run.png',
+    frameWidth  = 48,
+    frameHeight = 48,
+    totalFrames = 8,
+    interval    = 0.1,
+    loop        = true,
+  },
+  katana_run = {
+    file        = 'sprites/proto-woman/katana-run.png',
+    frameWidth  = 48,
+    frameHeight = 48,
+    totalFrames = 8,
+    interval    = 0.1,
+    loop        = true,
+  },
+  run_sword = {
+    file        = 'sprites/proto-woman/run-sword.png',
     frameWidth  = 48,
     frameHeight = 48,
     totalFrames = 8,
@@ -49,6 +83,14 @@ local ANIMS              = {
     totalFrames = 8,
     interval    = 0.08,
     loop        = true
+  },
+  katana_sprint = {
+    file        = 'sprites/proto-woman/katana-run.png',
+    frameWidth  = 48,
+    frameHeight = 48,
+    totalFrames = 8,
+    interval    = 0.08,
+    loop        = true,
   },
   dash = {
     file        = 'sprites/proto-woman/dash.png',
@@ -100,17 +142,17 @@ local ANIMS              = {
     interval    = 0.09,
     loop        = false
   },
-
-  -- need frameWidthOffset
-  attack_sheath = {
-    file        = 'sprites/proto-woman/attack-sheathe.png',
+  attack_katana_sheathe = {
+    file        = 'sprites/proto-woman/attack-katana-sheathe.png',
     frameWidth  = 80,
     frameHeight = 64,
-    totalFrames = 10,
-    interval    = 0.07,
-    loop        = true
+    sheetOffset = 1,
+    totalFrames = 3,
+    interval    = 0.05,
+    loop        = false,
+    offsetX     = -45,
+    offsetY     = -23
   },
-
   attack_continuous = {
     file        = 'sprites/proto-woman/attack-continuous.png',
     frameWidth  = 80,
@@ -119,7 +161,6 @@ local ANIMS              = {
     interval    = 0.06,
     loop        = true
   },
-
   sword_stab = {
     file        = 'sprites/proto-woman/sword-stab.png',
     frameWidth  = 96,
@@ -128,7 +169,6 @@ local ANIMS              = {
     interval    = 0.11,
     loop        = false
   },
-
   sword_attack = {
     file        = 'sprites/proto-woman/sword-attack.png',
     frameWidth  = 64,
@@ -137,7 +177,6 @@ local ANIMS              = {
     interval    = 0.1,
     loop        = true
   },
-
   air_attack = {
     file = 'sprites/samurai-2/air-attack.png',
     frameWidth = 96,
@@ -189,13 +228,12 @@ local ANIMS              = {
 
 function Player:new(x, y)
   Player.super.new(self, x, y, WIDTH, HEIGHT, ANIMS)
-
   -- movement --
   self.state           = 'idle'
   self.isLocked        = false
   self.jumpBufferTimer = 0
   self.coyoteTimer     = COYOTE_TIME
-
+  self.stance          = nil
   -- Dash --
   self.isDashing       = false
   self.dashTimer       = 0
@@ -203,11 +241,9 @@ function Player:new(x, y)
   self.dashAlpha       = 1
   self.dashHeld        = false
   self.isSprinting     = false
-
   -- attack --
   self.attackChain     = 0
   self.attackBuffered  = false
-
   -- Health --
   self.health          = PLAYER_HEALTH
   self.isInvincible    = false
@@ -215,7 +251,7 @@ function Player:new(x, y)
   self.isHurt          = false
 end
 
-function Player:update(dt, world, effects)
+function Player:update(dt, world)
   -- horizontal movement --
   local dir = self.isFacingRight and 1 or -1
 
@@ -225,14 +261,15 @@ function Player:update(dt, world, effects)
     self.isFacingRight = true
   end
 
-  if not self.isLocked or self.state == 'air_attack' or self.state == 'slide' or self.state == 'roll' then
+  if not self.isLocked
+      or self.state == 'air_attack'
+      or self.state == 'slide'
+      or self.state == 'roll' then
     if self.isSprinting then
       self.x = self.x + SPRINT_SPEED * dir * dt
     elseif self.state == 'roll' then
       self.x = self.x + SPRINT_SPEED * dir * dt
-    elseif love.keyboard.isDown('a') then
-      self.x = self.x + MOVE_SPEED * dir * dt
-    elseif love.keyboard.isDown('d') then
+    elseif love.keyboard.isDown('a') or love.keyboard.isDown('d') then
       self.x = self.x + MOVE_SPEED * dir * dt
     end
   end
@@ -252,9 +289,8 @@ function Player:update(dt, world, effects)
 
     self.dashTimer = self.dashTimer - dt
     if self.dashTimer <= 0 then
-      self.isDashing    = false
-      self.dashAlpha    = 1
-      self.dashCooldown = DASH_COOLDOWN
+      self.isDashing = false
+      self.dashAlpha = 1
       if self.dashHeld then
         self.isSprinting = true
       end
@@ -270,19 +306,6 @@ function Player:update(dt, world, effects)
   if self.state == 'slide' and not self.dashHeld then
     self.isLocked = false
     self:setState('idle')
-  end
-
-  -- Dash cooldown --
-  if self.dashCooldown > 0 then
-    self.dashCooldown = self.dashCooldown - dt
-    if self.dashCooldown <= 0 then
-      self.dashCooldown = 0
-      if effects then
-        local cx = self.x + self.width / 2
-        local cy = self.y + self.height / 2
-        effects:addDashReady(cx, cy)
-      end
-    end
   end
 
   -- Invincibility frames --
@@ -326,7 +349,9 @@ function Player:update(dt, world, effects)
   elseif self.isGrounded and self.state == 'air_attack' then -- land after air attack mid swing
     self.isLocked    = false
     self.attackChain = 0
-    self:setState('idle')
+    if self.stance then
+      self:setState('idle_' .. self.stance)
+    end
   elseif self.isLocked then
     -- do nothing
   elseif not self.isGrounded and self.coyoteTimer <= 0 then
@@ -337,9 +362,27 @@ function Player:update(dt, world, effects)
       self:setState('jump_fall')
     end
   elseif self.isSprinting and self.dashHeld then
-    self:setState('sprint')
+    if self.stance == 'katana' then
+      self:setState('katana_sprint')
+    else
+      self:setState('sprint')
+    end
   elseif love.keyboard.isDown('a') or love.keyboard.isDown('d') then
-    self:setState('run')
+    if self.stance == 'katana' then
+      self:setState('katana_run')
+    elseif self.stance == 'sword' then
+      self:setState('run_sword')
+    else
+      self:setState('run')
+    end
+  elseif self.stance == 'katana' then
+    if self.state ~= 'idle_katana' then
+      self:setState('idle_katana')
+    end
+  elseif self.stance == 'sword' then
+    if self.state ~= 'idle_sword' then
+      self:setState('idle_sword')
+    end
   else
     self:setState('idle')
   end
@@ -414,17 +457,31 @@ function Player:slide()
   end
 end
 
+function Player:toggleStance(stanceName)
+  if self.isLocked then return end
+
+  if self.stance == stanceName then
+    self.stance = nil
+    self:setState('idle')
+  else
+    self.stance = stanceName
+    self:setState('idle_' .. stanceName)
+  end
+end
+
 function Player:attack()
-  if not self.isGrounded and not self.isLocked then
-    self.isLocked    = true
-    self.attackChain = 0
-    self:setState('air_attack')
-  elseif self.isGrounded and not self.isLocked then
-    self.isLocked    = true
-    self.attackChain = 1
-    self:setState('attack_1')
-  elseif self.isGrounded and self.isLocked and self.attackChain < 3 and not self.attackBuffered then
-    self.attackBuffered = true
+  if not self.isLocked and self.isGrounded then
+    if self.stance == 'katana' then
+      if not self.isDashing then
+        self.isLocked = true
+        self:setState('attack_katana_sheathe')
+      else
+        -- set state for dash attack with katana --
+      end
+    elseif self.stance == 'sword' then
+      self.isLocked = true
+      -- set state to attack_sword
+    end
   end
 end
 
@@ -480,7 +537,9 @@ function Player:onAnimationEnd()
     self:setState('jump_fall')
   elseif self.state == 'air_spin' then
     self:setState('jump_fall')
-    -- attack --
+  elseif self.state == 'roll' then
+    self.isLocked = false
+    self:setState('idle')
   elseif self.state == 'slide' then
     self.isLocked = false
     if self.dashHeld then
@@ -488,30 +547,11 @@ function Player:onAnimationEnd()
     else
       self:setState('idle')
     end
-  elseif self.state == 'roll' then
+  elseif self.state == 'idle_katana' then
+    -- hold on last frame, do nothing
+  elseif self.state == 'attack_katana_sheathe' then
     self.isLocked = false
-    self:setState('idle')
-  elseif self.state == 'attack_1' or self.state == 'attack_2' then
-    if self.attackBuffered then -- next attack is initiated
-      self.attackBuffered = false
-      self.attackChain    = self.attackChain + 1
-      if self.attackChain <= 3 then
-        self:setState('attack_' .. self.attackChain)
-      else
-        self.isLocked    = false
-        self.attackChain = 0
-        self:setState('idle')
-      end
-    else -- next attack is NOT initiated
-      self.isLocked    = false
-      self.attackChain = 0
-      self:setState('idle')
-    end
-  elseif self.state == 'attack_3' then
-    self.isLocked       = false
-    self.attackChain    = 0
-    self.attackBuffered = false
-    self:setState('idle')
+    self:setState('idle_katana')
   elseif self.state == 'hurt' then
     self.isHurt   = false
     self.isLocked = false

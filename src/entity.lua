@@ -138,14 +138,17 @@ function Entity:draw(spriteOffsetX, spriteOffsetY, scaleX, scaleY)
   local flipX = self.isFacingRight and 1 or -1
   local offsetX = self.isFacingRight and 0 or def.frameWidth * scaleX
 
+  local animOffsetX = def.offsetX or 0
+  local animOffsetY = def.offsetY or 0
+
   love.graphics.draw(
-    self.sheets[self.state],                   -- drawable
-    self.quads[self.state][self.currentFrame], -- quad
-    self.x + (spriteOffsetX or 0) + offsetX,   -- x
-    self.y + (spriteOffsetY or 0),             -- y
-    0,                                         -- r
-    flipX * scaleX,                            -- sx
-    scaleY                                     -- sy
+    self.sheets[self.state],                               -- drawable
+    self.quads[self.state][self.currentFrame],             -- quad
+    self.x + (spriteOffsetX or 0) + offsetX + animOffsetX, -- x
+    self.y + (spriteOffsetY or 0) + animOffsetY,           -- y
+    0,                                                     -- r
+    flipX * scaleX,                                        -- sx
+    scaleY                                                 -- sy
   )
 end
 
