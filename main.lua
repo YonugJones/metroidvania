@@ -1,16 +1,18 @@
-Object       = require 'lib.classic'
-local World  = require 'src.world'
-local Player = require 'src.player'
+Object           = require 'lib.classic'
+local World      = require 'src.world'
+local Player     = require 'src.player'
 -- local Enemy   = require 'src.enemy'
-local Camera = require 'src.camera'
+local Camera     = require 'src.camera'
+local Background = require 'src.background'
 -- local Effects = require 'src.effects'
-local Debug  = require 'src.debug'
+local Debug      = require 'src.debug'
 
 function love.load()
-  world = World.new()
-  player = Player(200, 200)
+  world      = World.new()
+  player     = Player(200, 200)
   -- enemy = Enemy.new(500, 200)
-  camera = Camera.new()
+  camera     = Camera.new()
+  background = Background()
   -- effects = Effects.new()
 end
 
@@ -60,6 +62,7 @@ function love.update(dt)
 end
 
 function love.draw()
+  background:draw(camera)
   world:draw(camera)
   camera:attach()
 
