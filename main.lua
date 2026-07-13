@@ -85,11 +85,11 @@ function love.keypressed(key)
   end
 
   if key == 'u' then
-    player:toggleStance('katana')
+    player:toggleWeapon('sword')
   end
 
   if key == 'i' then
-    player:toggleStance('sword')
+    player:toggleWeapon('gun')
   end
 
   if key == 's' then

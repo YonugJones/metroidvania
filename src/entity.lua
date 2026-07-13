@@ -70,14 +70,22 @@ function Entity:updatePhysics(dt, world)
 end
 
 function Entity:updateAnimation(dt)
-  -- check if state has been set --
   local value = self.anims[self.state]
   if not value then return end
-
   local interval = self.frameInterval or value.interval
+
+  -- single frame non-looping: fire onAnimationEnd after one interval --
+  if value.totalFrames == 1 and not value.loop then
+    self.frameTimer = self.frameTimer + dt
+    if self.frameTimer >= interval then
+      self.frameTimer = 0
+      self:onAnimationEnd()
+    end
+    return -- exit here, don't fall through
+  end
+
   self.frameTimer = self.frameTimer + dt
 
-  -- at end of frame --
   if self.frameTimer >= interval then
     self.frameTimer = self.frameTimer - interval
 
