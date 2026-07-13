@@ -1,5 +1,6 @@
 Object           = require 'lib.classic'
 local World      = require 'src.world'
+local Hud        = require 'src.hud'
 local Player     = require 'src.player'
 -- local Enemy   = require 'src.enemy'
 local Camera     = require 'src.camera'
@@ -9,6 +10,7 @@ local Debug      = require 'src.debug'
 
 function love.load()
   world      = World.new()
+  hud        = Hud()
   player     = Player(200, 200)
   -- enemy = Enemy.new(500, 200)
   camera     = Camera.new()
@@ -70,6 +72,7 @@ function love.draw()
   player:draw()
   -- effects:draw()
   camera:detach()
+  hud:draw(player)
   Debug.draw()
 end
 

@@ -1,30 +1,36 @@
-local Entity             = require 'src.entity'
-local Player             = Entity:extend()
-local Debug              = require 'src.debug'
+local Entity               = require 'src.entity'
+local Player               = Entity:extend()
+local Debug                = require 'src.debug'
 
 -- size --
-local WIDTH              = 42
-local HEIGHT             = 115
-local SPRITE_OFFSET_X    = -123 -- lower number moves sprite to the left
-local SPRITE_OFFSET_Y    = -138 -- lower number moves sprite up
-local SCALE_X            = 3
-local SCALE_Y            = 3
+local WIDTH                = 42
+local HEIGHT               = 115
+local SPRITE_OFFSET_X      = -123 -- lower number moves sprite to the left
+local SPRITE_OFFSET_Y      = -138 -- lower number moves sprite up
+local SCALE_X              = 3
+local SCALE_Y              = 3
 
 -- movement --
-local MOVE_SPEED         = 350
-local SPRINT_SPEED       = 600
-local DASH_DURATION      = 0.3
-local JUMP_FORCE         = -900 -- jump height
-local JUMP_CUT           = 0.4
-local COYOTE_TIME        = 0.1  -- seconds you can still jump after walking off a ledge
-local JUMP_BUFFER        = 0.1  -- seconds before landing that a jump input is remembered
+local WALK_SPEED           = 150
+local RUN_SPEED            = 350
+local SPRINT_SPEED         = 600
+local DASH_DURATION        = 0.3
+local JUMP_FORCE           = -900 -- jump height
+local JUMP_CUT             = 0.4
+local COYOTE_TIME          = 0.1  -- seconds you can still jump after walking off a ledge
+local JUMP_BUFFER          = 0.1  -- seconds before landing that a jump input is remembered
 
 -- attack --
-local PLAYER_HEALTH      = 10
-local INVINCIBILITY_TIME = 1.0
-local HITBOX_WIDTH       = 100
+local PLAYER_HEALTH        = 10
+local INVINCIBILITY_TIME   = 1.0
+local HITBOX_WIDTH         = 100
 
-local ANIMS              = {
+local MAX_STAMINA          = 100
+local STAMINA_REGEN        = 20
+local STAMINA_JUMP_COST    = 15
+local STAMINA_SPRINT_DRAIN = 30
+
+local ANIMS                = {
   -- unarmed --
   idle = {
     file        = 'sprites/prototype/idle.png',
@@ -215,6 +221,9 @@ function Player:new(x, y)
   self.isInvincible    = false
   self.invincibleTimer = 0
   self.isHurt          = false
+  -- Stamina --
+  self.stamina         = MAX_STAMINA
+  self.isExhausted     = false
 end
 
 function Player:update(dt, world)
@@ -235,7 +244,8 @@ function Player:update(dt, world)
     elseif self.state == 'roll' then
       self.x = self.x + SPRINT_SPEED * dir * dt
     elseif love.keyboard.isDown('a') or love.keyboard.isDown('d') then
-      self.x = self.x + MOVE_SPEED * dir * dt
+      local speed = self.isExhausted and WALK_SPEED or RUN_SPEED
+      self.x = self.x + speed * dir * dt
     end
   end
 
@@ -256,6 +266,22 @@ function Player:update(dt, world)
   -- sprint check --
   if self.isSprinting and not self.dashHeld then
     self.isSprinting = false
+  end
+
+  -- stamina --
+  if self.isSprinting then
+    self.stamina = self.stamina - STAMINA_SPRINT_DRAIN * dt
+  else
+    self.stamina = self.stamina + STAMINA_REGEN * dt
+  end
+
+  self.stamina = math.max(0, math.min(MAX_STAMINA, self.stamina))
+
+  if self.stamina <= 0 then
+    self.isExhausted = true
+    self.isSprinting = false
+  elseif self.stamina >= MAX_STAMINA * 0.25 then
+    self.isExhausted = false
   end
 
   -- cancel slide if sprint released --
@@ -365,7 +391,8 @@ function Player:pressJump()
 end
 
 function Player:jump()
-  if self.coyoteTimer > 0 then
+  if self.coyoteTimer > 0 and self.stamina >= STAMINA_JUMP_COST then
+    self.stamina        = self.stamina - STAMINA_JUMP_COST
     self.vy             = JUMP_FORCE
     self.coyoteTimer    = 0
     self.isLocked       = false
@@ -386,7 +413,10 @@ function Player:releaseJump()
 end
 
 function Player:dash()
-  if not self.isDashing and self.dashCooldown <= 0 and not self.isLocked then
+  if not self.isDashing
+      and self.dashCooldown <= 0
+      and not self.isLocked
+      and not self.isExhausted then
     self.isDashing = true
     self.dashTimer = DASH_DURATION
     self:setState('dash')

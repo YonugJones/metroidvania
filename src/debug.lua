@@ -16,16 +16,20 @@ end
 function Debug.draw()
   if not enabled then return end
 
-  local y = 10
+  local screenWidth = love.graphics.getWidth()
+  local boxWidth    = 250
+  local x           = screenWidth - boxWidth - 5
+  local y           = 10
+
   love.graphics.setColor(0, 0, 0, 0.5)
-  love.graphics.rectangle('fill', 5, 5, 250, (8 + #lines * 18))
+  love.graphics.rectangle('fill', x, 5, boxWidth, (8 + #lines * 18))
   love.graphics.setColor(1, 1, 0)
   for key, value in pairs(lines) do
-    love.graphics.print(key .. ": " .. value, 10, y)
+    love.graphics.print(key .. ": " .. value, x + 5, y)
     y = y + 18
   end
   love.graphics.setColor(1, 1, 1)
-  lines = {} -- clear each frame
+  lines = {}
 end
 
 return Debug
