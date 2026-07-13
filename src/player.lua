@@ -34,6 +34,14 @@ local ANIMS              = {
     interval    = 0.2,
     loop        = true
   },
+  walk = {
+    file        = 'sprites/prototype/walk.png',
+    frameWidth  = 96,
+    frameHeight = 84,
+    totalFrames = 8,
+    interval    = 0.15,
+    loop        = true,
+  },
   run = {
     file        = 'sprites/prototype/run.png',
     frameWidth  = 96,
@@ -125,6 +133,14 @@ local ANIMS              = {
     interval    = 0.2,
     loop        = true,
   },
+  sword_walk = {
+    file        = 'sprites/prototype/sword-walk.png',
+    frameWidth  = 96,
+    frameHeight = 84,
+    totalFrames = 8,
+    interval    = 0.15,
+    loop        = true,
+  },
   sword_run = {
     file        = 'sprites/prototype/sword-run.png',
     frameWidth  = 96,
@@ -150,6 +166,14 @@ local ANIMS              = {
     totalFrames = 1,
     interval    = 0.2,
     loop        = true
+  },
+  gun_walk = {
+    file        = 'sprites/prototype/gun-walk.png',
+    frameWidth  = 96,
+    frameHeight = 84,
+    totalFrames = 8,
+    interval    = 0.15,
+    loop        = true,
   },
   gun_run = {
     file        = 'sprites/prototype/gun-run.png',
@@ -455,7 +479,6 @@ function Player:takeDamage(amount)
 end
 
 function Player:onAnimationEnd()
-  -- jump --
   if self.state == 'jump_up' then
     self:setState('jump_mid')
   elseif self.state == 'jump_mid' then
