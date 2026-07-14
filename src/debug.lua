@@ -21,8 +21,12 @@ function Debug.draw()
   local x           = screenWidth - boxWidth - 5
   local y           = 10
 
+  -- count keyed entries --
+  local count       = 0
+  for _ in pairs(lines) do count = count + 1 end
+
   love.graphics.setColor(0, 0, 0, 0.5)
-  love.graphics.rectangle('fill', x, 5, boxWidth, (8 + #lines * 18))
+  love.graphics.rectangle('fill', x, 5, boxWidth, (8 + count * 18))
   love.graphics.setColor(1, 1, 0)
   for key, value in pairs(lines) do
     love.graphics.print(key .. ": " .. value, x + 5, y)

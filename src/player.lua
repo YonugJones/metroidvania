@@ -24,10 +24,13 @@ local JUMP_BUFFER          = 0.1  -- seconds before landing that a jump input is
 local PLAYER_HEALTH        = 10
 local INVINCIBILITY_TIME   = 1.0
 local HITBOX_WIDTH         = 100
+local UNARMED_COMBO        = { 'kick_2', 'punch_1', 'kick_3' }
 
 local MAX_STAMINA          = 100
 local STAMINA_REGEN        = 20
 local STAMINA_JUMP_COST    = 15
+local STAMINA_DASH_COST    = 20
+local STAMINA_ROLL_COST    = 15
 local STAMINA_SPRINT_DRAIN = 30
 
 local ANIMS                = {
@@ -130,6 +133,57 @@ local ANIMS                = {
     loop        = false
   },
 
+  punch_1 = {
+    file        = 'sprites/prototype/punch-1.png',
+    frameWidth  = 96,
+    frameHeight = 84,
+    sheetOffset = 1,
+    totalFrames = 5,
+    interval    = 0.08,
+    loop        = false
+  },
+  punch_2 = {
+    file        = 'sprites/prototype/punch-2.png',
+    frameWidth  = 96,
+    frameHeight = 84,
+    totalFrames = 4,
+    interval    = 0.09,
+    loop        = false
+  },
+  punch_3 = {
+    file        = 'sprites/prototype/punch-3.png',
+    frameWidth  = 96,
+    frameHeight = 84,
+    totalFrames = 7,
+    interval    = 0.07,
+    loop        = false
+  },
+  kick_1 = {
+    file        = 'sprites/prototype/kick-1.png',
+    frameWidth  = 96,
+    frameHeight = 84,
+    totalFrames = 9,
+    interval    = 0.07,
+    loop        = false
+  },
+  kick_2 = {
+    file        = 'sprites/prototype/kick-2.png',
+    frameWidth  = 96,
+    frameHeight = 84,
+
+    totalFrames = 6,
+    interval    = 0.07,
+    loop        = false
+  },
+  kick_3 = {
+    file        = 'sprites/prototype/kick-3.png',
+    frameWidth  = 96,
+    frameHeight = 84,
+    sheetOffset = 1,
+    totalFrames = 8,
+    interval    = 0.07,
+    loop        = false
+  },
   -- sword --
   sword_idle = {
     file        = 'sprites/prototype/sword-idle.png',
@@ -216,6 +270,7 @@ function Player:new(x, y)
   -- attack --
   self.attackChain     = 0
   self.attackBuffered  = false
+  self.activeCombo     = nil
   -- Health --
   self.health          = PLAYER_HEALTH
   self.isInvincible    = false
@@ -315,15 +370,24 @@ function Player:update(dt, world)
   self:updateAnimation(dt)
 
   -- State machine --
-  if self.isLocked then
-    -- do nothing --
-  elseif self.isDashing then
+
+  if self.isDashing then
     self:setState('dash')
+  elseif self.isLocked then
+    -- do nothing --
+  elseif self.isExhausted and self.isGrounded then
+    if self.weapon == 'sword' then
+      self:setState('sword_walk')
+    elseif self.weapon == 'gun' then
+      self:setState('gun_walk')
+    else
+      self:setState('walk')
+    end
   elseif self.isGrounded and self.state == 'air_attack' then -- land after air attack mid swing
     self.isLocked    = false
     self.attackChain = 0
     if self.weapon then
-      self:setState(self.weapon .. 'idle')
+      self:setState(self.weapon .. '_idle')
     end
   elseif not self.isGrounded and self.coyoteTimer <= 0 then
     if self.state ~= 'jump_up'
@@ -391,7 +455,9 @@ function Player:pressJump()
 end
 
 function Player:jump()
-  if self.coyoteTimer > 0 and self.stamina >= STAMINA_JUMP_COST then
+  if self.coyoteTimer > 0
+      and self.stamina >= STAMINA_JUMP_COST
+      and not self.isExhausted then
     self.stamina        = self.stamina - STAMINA_JUMP_COST
     self.vy             = JUMP_FORCE
     self.coyoteTimer    = 0
@@ -417,9 +483,12 @@ function Player:dash()
       and self.dashCooldown <= 0
       and not self.isLocked
       and not self.isExhausted then
-    self.isDashing = true
-    self.dashTimer = DASH_DURATION
-    self:setState('dash')
+    if self.stamina >= STAMINA_DASH_COST then
+      self.stamina = self.stamina - STAMINA_DASH_COST
+      self.isDashing = true
+      self.dashTimer = DASH_DURATION
+      self:setState('dash')
+    end
   end
 end
 
@@ -427,13 +496,15 @@ function Player:slide()
   if not self.isGrounded or self.isLocked then
     return
   end
-
-  if self.isSprinting then
-    self.isLocked = true
-    self:setState('slide')
-  else
-    self.isLocked = true
-    self:setState('roll')
+  if self.stamina >= STAMINA_ROLL_COST then
+    if self.isSprinting then
+      self.isLocked = true
+      self:setState('slide')
+    else
+      self.isLocked = true
+      self.stamina = self.stamina - STAMINA_ROLL_COST
+      self:setState('roll')
+    end
   end
 end
 
@@ -449,16 +520,32 @@ function Player:toggleWeapon(weapon)
   end
 end
 
+function Player:testAnim(animName)
+  if self.isLocked then return end
+  self.isLocked = true
+  self.attackChain = 0
+  self:setState(animName)
+end
+
 function Player:attack()
-  if not self.isLocked and self.isGrounded then
-    if self.weapon == 'sword' then
-      if not self.isDashing then
-        self.isLocked = true
-        -- set state for sword attack
-      else
-        -- set state for dash attack with sword --
-      end
-    end
+  local combo
+  if not self.weapon then
+    combo = UNARMED_COMBO
+  else
+    return
+  end
+
+
+
+  if not self.isLocked
+      and self.isGrounded
+      and not self.isExhausted then
+    self.activeCombo = combo
+    self.isLocked = true
+    self.attackChain = 1
+    self:setState(combo[1])
+  elseif self.isLocked and self.attackChain < 3 and not self.attackBuffered then
+    self.attackBuffered = true
   end
 end
 
@@ -528,6 +615,30 @@ function Player:onAnimationEnd()
   elseif self.state == 'hurt' then
     self.isHurt   = false
     self.isLocked = false
+    self:setState('idle')
+  elseif self.activeCombo and self.activeCombo[self.attackChain] == self.state then
+    if self.attackBuffered then
+      self.attackBuffered = false
+      self.attackChain    = self.attackChain + 1
+      local nextState     = self.activeCombo[self.attackChain]
+      if nextState then
+        self:setState(nextState)
+      else
+        self.isLocked    = false
+        self.attackChain = 0
+        self.activeCombo = nil
+        self:setState('idle')
+      end
+    else
+      self.isLocked    = false
+      self.attackChain = 0
+      self.activeCombo = nil
+      self:setState('idle')
+    end
+  elseif self.state == 'punch_1' or self.state == 'punch_2' or self.state == 'punch_3'
+      or self.state == 'kick_1' or self.state == 'kick_2' or self.state == 'kick_3' then
+    self.isLocked    = false
+    self.attackChain = 0
     self:setState('idle')
   end
 end
