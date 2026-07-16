@@ -111,12 +111,6 @@ function love.keypressed(key)
   end
 
   -- debug attack testing --
-  if key == '1' then player:testAnim('punch_1') end
-  if key == '2' then player:testAnim('punch_2') end
-  if key == '3' then player:testAnim('punch_3') end
-  if key == '4' then player:testAnim('kick_1') end
-  if key == '5' then player:testAnim('kick_2') end
-  if key == '6' then player:testAnim('kick_3') end
 end
 
 function love.keyreleased(key)

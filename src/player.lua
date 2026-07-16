@@ -25,13 +25,14 @@ local PLAYER_HEALTH        = 10
 local INVINCIBILITY_TIME   = 1.0
 local HITBOX_WIDTH         = 100
 local UNARMED_COMBO        = { 'kick_2', 'punch_1', 'kick_3' }
+local SWORD_COMBO          = { 'sword_attack_1', 'sword_attack_2', 'sword_attack_3', 'sword_attack_4' }
 
 local MAX_STAMINA          = 100
-local STAMINA_REGEN        = 20
+local STAMINA_REGEN        = 30
 local STAMINA_JUMP_COST    = 15
-local STAMINA_DASH_COST    = 20
-local STAMINA_ROLL_COST    = 15
-local STAMINA_SPRINT_DRAIN = 30
+local STAMINA_DASH_COST    = 10
+local STAMINA_ROLL_COST    = 30
+local STAMINA_SPRINT_DRAIN = 20
 
 local ANIMS                = {
   -- unarmed --
@@ -133,13 +134,13 @@ local ANIMS                = {
     loop        = false
   },
 
-  punch_1 = {
+  punch_1 = { -- second hit in fist combo --
     file        = 'sprites/prototype/punch-1.png',
     frameWidth  = 96,
     frameHeight = 84,
     sheetOffset = 1,
     totalFrames = 5,
-    interval    = 0.08,
+    interval    = 0.05,
     loop        = false
   },
   punch_2 = {
@@ -166,22 +167,22 @@ local ANIMS                = {
     interval    = 0.07,
     loop        = false
   },
-  kick_2 = {
+  kick_2 = { -- first hit in fist combo
     file        = 'sprites/prototype/kick-2.png',
     frameWidth  = 96,
     frameHeight = 84,
 
     totalFrames = 6,
-    interval    = 0.07,
+    interval    = 0.05,
     loop        = false
   },
-  kick_3 = {
+  kick_3 = { -- third hit in fist combo
     file        = 'sprites/prototype/kick-3.png',
     frameWidth  = 96,
     frameHeight = 84,
     sheetOffset = 1,
     totalFrames = 8,
-    interval    = 0.07,
+    interval    = 0.06,
     loop        = false
   },
   -- sword --
@@ -216,6 +217,62 @@ local ANIMS                = {
     totalFrames = 6,
     interval    = 0.08,
     loop        = true,
+  },
+  sword_attack_1 = {
+    file        = 'sprites/prototype/sword-attack-1.png',
+    frameWidth  = 96,
+    frameHeight = 84,
+    totalFrames = 6,
+    interval    = 0.07,
+    loop        = false
+  },
+  sword_attack_2 = {
+    file        = 'sprites/prototype/sword-attack-2.png',
+    frameWidth  = 96,
+    frameHeight = 84,
+    totalFrames = 5,
+    interval    = 0.07,
+    loop        = false
+  },
+  sword_attack_3 = {
+    file        = 'sprites/prototype/sword-attack-3.png',
+    frameWidth  = 96,
+    frameHeight = 84,
+    totalFrames = 5,
+    interval    = 0.07,
+    loop        = false
+  },
+  sword_attack_4 = {
+    file        = 'sprites/prototype/sword-attack-4.png',
+    frameWidth  = 96,
+    frameHeight = 84,
+    totalFrames = 8,
+    interval    = 0.07,
+    loop        = false
+  },
+  sword_air_forward = {
+    file        = 'sprites/prototype/sword-air-forward.png',
+    frameWidth  = 96,
+    frameHeight = 84,
+    totalFrames = 4,
+    interval    = 0.06,
+    loop        = false,
+  },
+  sword_air_up = {
+    file        = 'sprites/prototype/sword-air-up.png',
+    frameWidth  = 96,
+    frameHeight = 84,
+    totalFrames = 6,
+    interval    = 0.06,
+    loop        = false,
+  },
+  sword_air_down = {
+    file        = 'sprites/prototype/sword-air-down.png',
+    frameWidth  = 96,
+    frameHeight = 84,
+    totalFrames = 6,
+    interval    = 0.06,
+    loop        = false,
   },
 
   -- gun --
@@ -370,7 +427,6 @@ function Player:update(dt, world)
   self:updateAnimation(dt)
 
   -- State machine --
-
   if self.isDashing then
     self:setState('dash')
   elseif self.isLocked then
@@ -383,7 +439,7 @@ function Player:update(dt, world)
     else
       self:setState('walk')
     end
-  elseif self.isGrounded and self.state == 'air_attack' then -- land after air attack mid swing
+  elseif self.isGrounded and self.state == 'sword_air_forward' then -- land after air attack mid swing
     self.isLocked    = false
     self.attackChain = 0
     if self.weapon then
@@ -393,7 +449,7 @@ function Player:update(dt, world)
     if self.state ~= 'jump_up'
         and self.state ~= 'jump_mid'
         and self.state ~= 'jump_fall'
-        and self.state ~= 'air_attack'
+        and self.state ~= 'sword_air_forward'
         and self.state ~= 'front_flip' then
       self:setState('jump_fall')
     end
@@ -531,11 +587,11 @@ function Player:attack()
   local combo
   if not self.weapon then
     combo = UNARMED_COMBO
+  elseif self.weapon == 'sword' then
+    combo = SWORD_COMBO
   else
     return
   end
-
-
 
   if not self.isLocked
       and self.isGrounded
@@ -544,18 +600,31 @@ function Player:attack()
     self.isLocked = true
     self.attackChain = 1
     self:setState(combo[1])
-  elseif self.isLocked and self.attackChain < 3 and not self.attackBuffered then
+  elseif self.isLocked and self.attackChain < 4 and not self.attackBuffered then
     self.attackBuffered = true
+  elseif not self.isGrounded
+      and not self.isLocked
+      and not self.isExhausted then
+    self.isLocked = true
+    if self.weapon == 'sword' then
+      if love.keyboard.isDown('s') then
+        self:setState('sword_air_down')
+      elseif love.keyboard.isDown('w') then
+        self:setState('sword_air_up')
+      else
+        self:setState('sword_air_forward')
+      end
+    end
   end
 end
 
 function Player:getHitbox()
   local attackStates = {
-    attack_1       = true,
-    attack_2       = true,
-    attack_3       = true,
-    air_attack     = true,
-    special_attack = true
+    attack_1          = true,
+    attack_2          = true,
+    attack_3          = true,
+    sword_air_forward = true,
+    special_attack    = true
   }
   if not attackStates[self.state] then return nil end
 
@@ -602,6 +671,17 @@ function Player:onAnimationEnd()
     self:setState('jump_fall')
   elseif self.state == 'front_flip' then
     self:setState('jump_fall')
+
+    -- air attack logic --
+  elseif self.state == 'sword_air_forward'
+      or self.state == 'sword_air_down'
+      or self.state == 'sword_air_up' then
+    self.isLocked = false
+    if self.vy > 0 then
+      self:setState('jump_fall')
+    else
+      self:setState('jump_up')
+    end
   elseif self.state == 'roll' then
     self.isLocked = false
     self:setState('idle')
@@ -635,11 +715,6 @@ function Player:onAnimationEnd()
       self.activeCombo = nil
       self:setState('idle')
     end
-  elseif self.state == 'punch_1' or self.state == 'punch_2' or self.state == 'punch_3'
-      or self.state == 'kick_1' or self.state == 'kick_2' or self.state == 'kick_3' then
-    self.isLocked    = false
-    self.attackChain = 0
-    self:setState('idle')
   end
 end
 
