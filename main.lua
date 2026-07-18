@@ -98,8 +98,8 @@ function love.keypressed(key)
     player:toggleWeapon('gun')
   end
 
-  if key == 's' then
-    player:slide()
+  if key == 'h' then
+    player:roll()
   end
 
   if key == 'p' then
